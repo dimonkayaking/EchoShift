@@ -6,6 +6,7 @@ public class Player
 {
     public Vector2 Position;
     public int Health;
+    public int MaxHealth;
     public float Speed;
     public int Damage;
     public float ShootCooldownMax;
@@ -23,7 +24,8 @@ public class Player
     public Player(Vector2 startPos)
     {
         Position = startPos;
-        Health = 100;
+        MaxHealth = 100;
+        Health = MaxHealth;
         Speed = 300f;
         Damage = 10;
         ShootCooldownMax = 0.3f;
@@ -99,6 +101,13 @@ public class Player
         IsInvincible = true;
         _invincibleTimer = 1.0f;
         if (Health < 0) Health = 0;
+    }
+
+    public void GiveIFrames(float seconds)
+    {
+        if (seconds <= 0) return;
+        IsInvincible = true;
+        _invincibleTimer = MathHelper.Max(_invincibleTimer, seconds);
     }
 
     public void Draw(SpriteBatch spriteBatch)
