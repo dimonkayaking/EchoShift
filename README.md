@@ -1,4 +1,4 @@
-# C-Game
+# EchoShift
 
 ## Запуск
 
