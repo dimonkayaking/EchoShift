@@ -17,7 +17,7 @@ public class EchoOrb
 
     public void Update(float deltaTime, Vector2 playerPos)
     {
-        Vector2 dir = playerPos - Position;
+        var dir = playerPos - Position;
         if (dir.Length() < 5f)
         {
             Collected = true;

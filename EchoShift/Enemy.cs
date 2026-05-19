@@ -67,7 +67,7 @@ public class Enemy
 
         if (_currentWave >= 5)
         {
-            float shieldPercent = 0.33f + (_currentWave - 5) * 0.05f;
+            var shieldPercent = 0.33f + (_currentWave - 5) * 0.05f;
             shieldPercent = MathHelper.Min(shieldPercent, 0.8f);
             Shield = (int)(MaxHealth * shieldPercent);
             MaxShield = Shield;
@@ -83,13 +83,11 @@ public class Enemy
 
     public void Update(float deltaTime, Vector2 playerPos, Vector2? decoyPos)
     {
-        Vector2 target = decoyPos ?? playerPos;
-        Vector2 direction = target - Position;
+        var target = decoyPos ?? playerPos;
+        var direction = target - Position;
         if (direction != Vector2.Zero) direction.Normalize();
         Position += direction * Speed * deltaTime;
-
-        if (IsRanged)
-            _shootTimer -= deltaTime;
+        if (IsRanged) _shootTimer -= deltaTime;
     }
 
     public bool TryShoot(Vector2 targetPos, out Vector2 direction, out int damage)
@@ -99,8 +97,8 @@ public class Enemy
         if (!IsRanged) return false;
         if (_shootTimer > 0) return false;
 
-        Vector2 toTarget = targetPos - Position;
-        float dist = toTarget.Length();
+        var toTarget = targetPos - Position;
+        var dist = toTarget.Length();
         if (dist <= 1f || dist > _shootRange) return false;
         direction = toTarget / dist;
         damage = _shootDamage;
@@ -112,18 +110,17 @@ public class Enemy
     {
         if (Shield > 0)
         {
-            int shieldDamage = Math.Min(Shield, amount);
+            var shieldDamage = Math.Min(Shield, amount);
             Shield -= shieldDamage;
             amount -= shieldDamage;
         }
-        if (amount > 0)
-            Health -= amount;
+        if (amount > 0) Health -= amount;
     }
 
     public bool CollidesWith(Player player)
     {
-        Rectangle enemyRect = new Rectangle((int)Position.X, (int)Position.Y, 32, 32);
-        Rectangle playerRect = new Rectangle((int)player.Position.X, (int)player.Position.Y, 32, 32);
+        var enemyRect = new Rectangle((int)Position.X, (int)Position.Y, 32, 32);
+        var playerRect = new Rectangle((int)player.Position.X, (int)player.Position.Y, 32, 32);
         return enemyRect.Intersects(playerRect);
     }
 
@@ -131,17 +128,17 @@ public class Enemy
     {
         spriteBatch.Draw(_texture, Position, Color.White);
 
-        float hp01 = MaxHealth <= 0 ? 0f : MathHelper.Clamp((float)Health / MaxHealth, 0f, 1f);
-        int barW = 32;
-        int barH = 5;
-        int x = (int)Position.X;
-        int y = (int)Position.Y - 8;
+        var hp01 = MaxHealth <= 0 ? 0f : MathHelper.Clamp((float)Health / MaxHealth, 0f, 1f);
+        var barW = 32;
+        var barH = 5;
+        var x = (int)Position.X;
+        var y = (int)Position.Y - 8;
         spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, barW, barH), new Color(0, 0, 0, 160));
         spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, (int)(barW * hp01), barH), Color.LimeGreen);
 
         if (MaxShield > 0)
         {
-            float shield01 = MathHelper.Clamp((float)Shield / MaxShield, 0f, 1f);
+            var shield01 = MathHelper.Clamp((float)Shield / MaxShield, 0f, 1f);
             spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y - 4, (int)(barW * shield01), 3), Color.White);
         }
     }

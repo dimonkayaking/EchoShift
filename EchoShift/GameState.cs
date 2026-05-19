@@ -1,4 +1,3 @@
-// using не требуется, так как класс не использует MonoGame напрямую
 public class GameState
 {
     public int Kills { get; set; }

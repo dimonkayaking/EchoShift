@@ -11,7 +11,6 @@ public class Bullet
     public int Damage;
     public bool IsExpired { get; set; }
 
-    // Размер экрана (устанавливается из Game1)
     public static int ScreenWidth = 1280;
     public static int ScreenHeight = 720;
 
@@ -28,24 +27,18 @@ public class Bullet
 
     public void Update(float deltaTime)
     {
-        float step = _speed * deltaTime;
+        var step = _speed * deltaTime;
         Position += _direction * step;
         _distanceTraveled += step;
-
-        // Удаление по дальности
-        if (_distanceTraveled >= _range)
-            IsExpired = true;
-
-        // Удаление при выходе за границы экрана (с запасом)
-        if (Position.X < -100 || Position.X > ScreenWidth + 100 ||
-            Position.Y < -100 || Position.Y > ScreenHeight + 100)
+        if (_distanceTraveled >= _range) IsExpired = true;
+        if (Position.X < -100 || Position.X > ScreenWidth + 100 || Position.Y < -100 || Position.Y > ScreenHeight + 100)
             IsExpired = true;
     }
 
     public bool CollidesWith(Enemy enemy)
     {
-        Rectangle bulletRect = new Rectangle((int)Position.X, (int)Position.Y, 8, 8);
-        Rectangle enemyRect = new Rectangle((int)enemy.Position.X, (int)enemy.Position.Y, 32, 32);
+        var bulletRect = new Rectangle((int)Position.X, (int)Position.Y, 8, 8);
+        var enemyRect = new Rectangle((int)enemy.Position.X, (int)enemy.Position.Y, 32, 32);
         return bulletRect.Intersects(enemyRect);
     }
 

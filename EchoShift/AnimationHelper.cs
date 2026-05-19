@@ -41,7 +41,7 @@ public class AnimationHelper
 
     public void Draw(SpriteBatch spriteBatch, Vector2 position, SpriteEffects effects = SpriteEffects.None)
     {
-        Rectangle sourceRect = new Rectangle(_currentFrame * _frameWidth, 0, _frameWidth, _frameHeight);
+        var sourceRect = new Rectangle(_currentFrame * _frameWidth, 0, _frameWidth, _frameHeight);
         spriteBatch.Draw(_texture, position, sourceRect, Color.White, 0f, Vector2.Zero, 1f, effects, 0f);
     }
 

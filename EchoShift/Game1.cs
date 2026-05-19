@@ -55,7 +55,6 @@ namespace EchoShift
         private Rectangle _gameOverRestartButton;
         private bool _gameOverButtonHover;
 
-        // Рулетка
         private bool _isSlotSpinning;
         private float _slotSpinTimer;
         private const float SLOT_SPIN_DURATION = 2.2f;
@@ -65,7 +64,6 @@ namespace EchoShift
         private string _slotResultText;
         private float _slotResultTimer;
 
-        // Прицел
         private Texture2D _crosshairTexture;
 
         private int _screenWidth;
@@ -77,9 +75,8 @@ namespace EchoShift
             Content.RootDirectory = "Content";
             IsMouseVisible = false;
 
-            // Оконный режим без рамки, растянутый на весь экран (панель задач видна)
-            int screenWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
-            int screenHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
+            var screenWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
+            var screenHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
             _graphics.PreferredBackBufferWidth = screenWidth;
             _graphics.PreferredBackBufferHeight = screenHeight;
             _graphics.IsFullScreen = false;
@@ -127,8 +124,8 @@ namespace EchoShift
             _isSlotSpinning = false;
             _slotResultText = "";
             _slotResultTimer = 0f;
-            for (int i = 0; i < 3; i++)
-                for (int j = 0; j < 3; j++)
+            for (var i = 0; i < 3; i++)
+                for (var j = 0; j < 3; j++)
                     _slotValues[i, j] = _rand.Next(0, 10);
 
             _ui = new UI();
@@ -142,28 +139,25 @@ namespace EchoShift
             TextureManager.Load(Content);
             _ui.LoadContent(Content);
 
-            // Создаём прицел – две пересекающиеся линии с разрывом в центре, толщиной 2 пикселя
             _crosshairTexture = new Texture2D(GraphicsDevice, 31, 31);
-            Color[] data = new Color[31 * 31];
-            for (int i = 0; i < data.Length; i++) data[i] = Color.Transparent;
+            var data = new Color[31 * 31];
+            for (var i = 0; i < data.Length; i++) data[i] = Color.Transparent;
 
-            int center = 15;   // центральный пиксель (0-30)
-            int gap = 4;       // разрыв в центре (4 пикселя от центра в каждую сторону)
+            var center = 15;
+            var gap = 4;
 
-            // Горизонтальная линия (толщина 2 пикселя: строки center-1 и center)
-            for (int y = center - 1; y <= center; y++)
+            for (var y = center - 1; y <= center; y++)
             {
-                for (int x = 0; x < 31; x++)
+                for (var x = 0; x < 31; x++)
                 {
                     if (Math.Abs(x - center) > gap)
                         data[y * 31 + x] = Color.White;
                 }
             }
 
-            // Вертикальная линия (толщина 2 пикселя: столбцы center-1 и center)
-            for (int x = center - 1; x <= center; x++)
+            for (var x = center - 1; x <= center; x++)
             {
-                for (int y = 0; y < 31; y++)
+                for (var y = 0; y < 31; y++)
                 {
                     if (Math.Abs(y - center) > gap)
                         data[y * 31 + x] = Color.White;
@@ -175,7 +169,7 @@ namespace EchoShift
             _player = new Player(new Vector2(_screenWidth / 2, _screenHeight / 2));
             _player.LoadContent();
 
-            for (int i = 0; i < ECHO_HISTORY_LENGTH; i++)
+            for (var i = 0; i < ECHO_HISTORY_LENGTH; i++)
                 _positionHistory.Enqueue(_player.Position);
 
             _echo = new EchoFollower(TextureManager.DecoyTex, _player.Position, followDelayFrames: 60);
@@ -183,11 +177,11 @@ namespace EchoShift
 
         protected override void Update(GameTime gameTime)
         {
-            float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            var deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
             if (deltaTime > 0.033f) deltaTime = 0.033f;
 
-            KeyboardState keyboard = Keyboard.GetState();
-            MouseState mouse = Mouse.GetState();
+            var keyboard = Keyboard.GetState();
+            var mouse = Mouse.GetState();
 
             _screenWidth = _graphics.PreferredBackBufferWidth;
             _screenHeight = _graphics.PreferredBackBufferHeight;
@@ -215,11 +209,11 @@ namespace EchoShift
                 if (keyboard.IsKeyDown(Keys.Enter) && !_prevKeyboard.IsKeyDown(Keys.Enter))
                     RestartGame();
 
-                bool click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
-                int btnW = _screenWidth * 25 / 100;
-                int btnH = _screenHeight * 8 / 100;
-                int btnX = (_screenWidth - btnW) / 2;
-                int btnY = _screenHeight * 65 / 100;
+                var click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
+                var btnW = _screenWidth * 25 / 100;
+                var btnH = _screenHeight * 8 / 100;
+                var btnX = (_screenWidth - btnW) / 2;
+                var btnY = _screenHeight * 65 / 100;
                 _gameOverRestartButton = new Rectangle(btnX, btnY, btnW, btnH);
                 _gameOverButtonHover = _gameOverRestartButton.Contains(mouse.Position);
                 if (click && _gameOverButtonHover)
@@ -234,15 +228,15 @@ namespace EchoShift
             if (_screen == Screen.WaveComplete)
             {
                 _waveCompleteFlashTimer += deltaTime;
-                int btnW = _screenWidth * 25 / 100;
-                int btnH = _screenHeight * 8 / 100;
-                int btnX = (_screenWidth - btnW) / 2;
+                var btnW = _screenWidth * 25 / 100;
+                var btnH = _screenHeight * 8 / 100;
+                var btnX = (_screenWidth - btnW) / 2;
                 _nextWaveButton = new Rectangle(btnX, _screenHeight * 45 / 100, btnW, btnH);
                 _restartWaveButton = new Rectangle(btnX, _screenHeight * 55 / 100, btnW, btnH);
-                Point mousePos = mouse.Position;
+                var mousePos = mouse.Position;
                 _nextWaveButtonHover = _nextWaveButton.Contains(mousePos);
                 _restartWaveButtonHover = _restartWaveButton.Contains(mousePos);
-                bool click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
+                var click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
                 if (click)
                 {
                     if (_nextWaveButtonHover) NextWave();
@@ -270,13 +264,13 @@ namespace EchoShift
 
             if (_isMenuOpen)
             {
-                bool click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
-                int btnW = _screenWidth * 25 / 100;
-                int btnH = _screenHeight * 7 / 100;
-                int btnX = (_screenWidth - btnW) / 2;
-                Rectangle resumeRect = new Rectangle(btnX, _screenHeight * 38 / 100, btnW, btnH);
-                Rectangle restartRect = new Rectangle(btnX, _screenHeight * 48 / 100, btnW, btnH);
-                Rectangle quitRect = new Rectangle(btnX, _screenHeight * 58 / 100, btnW, btnH);
+                var click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
+                var btnW = _screenWidth * 25 / 100;
+                var btnH = _screenHeight * 7 / 100;
+                var btnX = (_screenWidth - btnW) / 2;
+                var resumeRect = new Rectangle(btnX, _screenHeight * 38 / 100, btnW, btnH);
+                var restartRect = new Rectangle(btnX, _screenHeight * 48 / 100, btnW, btnH);
+                var quitRect = new Rectangle(btnX, _screenHeight * 58 / 100, btnW, btnH);
                 if (click)
                 {
                     if (resumeRect.Contains(mouse.Position)) _isMenuOpen = false;
@@ -296,15 +290,14 @@ namespace EchoShift
                 return;
             }
 
-            // MAIN GAMEPLAY
             _positionHistory.Enqueue(_player.Position);
             if (_positionHistory.Count > ECHO_HISTORY_LENGTH) _positionHistory.Dequeue();
 
             _player.Update(deltaTime, Mouse.GetState(), keyboard);
             _echo.Update(_positionHistory);
 
-            bool shiftDown = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
-            bool prevShiftDown = _prevKeyboard.IsKeyDown(Keys.LeftShift) || _prevKeyboard.IsKeyDown(Keys.RightShift);
+            var shiftDown = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
+            var prevShiftDown = _prevKeyboard.IsKeyDown(Keys.LeftShift) || _prevKeyboard.IsKeyDown(Keys.RightShift);
             if (shiftDown && !prevShiftDown && GetTeleportsAvailable() > 0)
                 TeleportToEcho();
 
@@ -317,17 +310,16 @@ namespace EchoShift
                 _slotResultText = "";
                 _slotResultTimer = 0f;
                 _isSlotSpinning = false;
-                for (int i = 0; i < 3; i++)
-                    for (int j = 0; j < 3; j++)
+                for (var i = 0; i < 3; i++)
+                    for (var j = 0; j < 3; j++)
                         _slotValues[i, j] = _rand.Next(0, 10);
             }
 
-            MouseState mouseNow = Mouse.GetState();
+            var mouseNow = Mouse.GetState();
             if (mouseNow.LeftButton == ButtonState.Pressed && _player.CanShoot(deltaTime))
                 Shoot();
 
-            // Пули игрока
-            for (int i = 0; i < _bullets.Count; i++)
+            for (var i = 0; i < _bullets.Count; i++)
             {
                 _bullets[i].Update(deltaTime);
                 if (_bullets[i].IsExpired)
@@ -337,8 +329,7 @@ namespace EchoShift
                 }
             }
 
-            // Вражеские пули
-            for (int i = 0; i < _enemyBullets.Count; i++)
+            for (var i = 0; i < _enemyBullets.Count; i++)
             {
                 _enemyBullets[i].Update(deltaTime);
                 if (_enemyBullets[i].CollidesWith(_player) && !_player.IsInvincible)
@@ -354,8 +345,7 @@ namespace EchoShift
                 }
             }
 
-            // Враги
-            for (int i = 0; i < _enemies.Count; i++)
+            for (var i = 0; i < _enemies.Count; i++)
             {
                 _enemies[i].Update(deltaTime, _player.Position, decoyPos: null);
 
@@ -365,14 +355,14 @@ namespace EchoShift
                     if (_player.Health <= 0) _screen = Screen.GameOver;
                 }
 
-                if (_enemies[i].TryShoot(_player.Position, out Vector2 dir, out int dmg))
+                if (_enemies[i].TryShoot(_player.Position, out var dir, out var dmg))
                     _enemyBullets.Add(new EnemyBullet(_enemies[i].Position + new Vector2(16, 16), dir, dmg));
 
-                for (int j = 0; j < _bullets.Count; j++)
+                for (var j = 0; j < _bullets.Count; j++)
                 {
                     if (_bullets[j].CollidesWith(_enemies[i]))
                     {
-                        int enemyType = _enemies[i].IsMelee ? 1 : (_enemies[i].MaxHealth > 50 ? 2 : 0);
+                        var enemyType = _enemies[i].IsMelee ? 1 : (_enemies[i].MaxHealth > 50 ? 2 : 0);
                         _enemies[i].TakeDamage(_player.Damage);
                         _bullets[j].IsExpired = true;
                         if (_enemies[i].IsDead)
@@ -396,7 +386,6 @@ namespace EchoShift
                 _echoPoints += 10 + _waveSystem.CurrentWave * 2;
             }
 
-            // Спавн врагов
             if (_waveSystem.IsWaveInProgress && _waveSystem.HasEnemiesToSpawn())
             {
                 _spawnTimer += deltaTime;
@@ -404,13 +393,13 @@ namespace EchoShift
                 if (_spawnTimer >= _spawnInterval)
                 {
                     _spawnTimer = 0;
-                    int type = _waveSystem.GetNextEnemyType();
+                    var type = _waveSystem.GetNextEnemyType();
                     SpawnEnemy(type);
                     _waveSystem.OnEnemySpawned(type);
                 }
             }
 
-            for (int i = 0; i < _echoOrbs.Count; i++)
+            for (var i = 0; i < _echoOrbs.Count; i++)
             {
                 _echoOrbs[i].Update(deltaTime, _player.Position);
                 if (_echoOrbs[i].Collected)
@@ -444,9 +433,9 @@ namespace EchoShift
                     _slotBetIndex = (_slotBetIndex + 1) % _slotBets.Length;
                 if (keyboard.IsKeyDown(Keys.Up) && !_prevKeyboard.IsKeyDown(Keys.Up))
                 {
-                    int newBet = _slotBets[_slotBetIndex] + 10;
-                    int bestIdx = _slotBetIndex;
-                    for (int i = 0; i < _slotBets.Length; i++)
+                    var newBet = _slotBets[_slotBetIndex] + 10;
+                    var bestIdx = _slotBetIndex;
+                    for (var i = 0; i < _slotBets.Length; i++)
                         if (_slotBets[i] >= newBet && _slotBets[i] < _slotBets[bestIdx])
                             bestIdx = i;
                     if (_slotBets[bestIdx] < newBet) bestIdx = _slotBets.Length - 1;
@@ -454,9 +443,9 @@ namespace EchoShift
                 }
                 if (keyboard.IsKeyDown(Keys.Down) && !_prevKeyboard.IsKeyDown(Keys.Down))
                 {
-                    int newBet = _slotBets[_slotBetIndex] - 10;
-                    int bestIdx = _slotBetIndex;
-                    for (int i = _slotBets.Length - 1; i >= 0; i--)
+                    var newBet = _slotBets[_slotBetIndex] - 10;
+                    var bestIdx = _slotBetIndex;
+                    for (var i = _slotBets.Length - 1; i >= 0; i--)
                         if (_slotBets[i] <= newBet && _slotBets[i] > _slotBets[bestIdx])
                             bestIdx = i;
                     if (_slotBets[bestIdx] > newBet) bestIdx = 0;
@@ -466,7 +455,7 @@ namespace EchoShift
 
             if (keyboard.IsKeyDown(Keys.Space) && !_prevKeyboard.IsKeyDown(Keys.Space) && !_isSlotSpinning)
             {
-                int bet = _slotBets[_slotBetIndex];
+                var bet = _slotBets[_slotBetIndex];
                 if (_echoPoints >= bet)
                 {
                     _echoPoints -= bet;
@@ -484,28 +473,27 @@ namespace EchoShift
             if (_isSlotSpinning)
             {
                 _slotSpinTimer += deltaTime;
-                for (int col = 0; col < 3; col++)
-                    for (int row = 0; row < 3; row++)
+                for (var col = 0; col < 3; col++)
+                    for (var row = 0; row < 3; row++)
                         _slotValues[row, col] = _rand.Next(0, 10);
 
                 if (_slotSpinTimer >= SLOT_SPIN_DURATION)
                 {
                     _isSlotSpinning = false;
-                    // Генерация финальных значений (честная случайность)
-                    for (int col = 0; col < 3; col++)
+                    for (var col = 0; col < 3; col++)
                     {
-                        int[] colValues = new int[3];
-                        for (int row = 0; row < 3; row++)
+                        var colValues = new int[3];
+                        for (var row = 0; row < 3; row++)
                             colValues[row] = _rand.Next(0, 10);
-                        for (int row = 0; row < 3; row++)
+                        for (var row = 0; row < 3; row++)
                             _slotValues[row, col] = colValues[row];
                     }
 
-                    int val0 = _slotValues[1, 0];
-                    int val1 = _slotValues[1, 1];
-                    int val2 = _slotValues[1, 2];
-                    int bet = _slotBets[_slotBetIndex];
-                    int win = 0;
+                    var val0 = _slotValues[1, 0];
+                    var val1 = _slotValues[1, 1];
+                    var val2 = _slotValues[1, 2];
+                    var bet = _slotBets[_slotBetIndex];
+                    var win = 0;
                     string resultMsg = "";
 
                     if (val0 == val1 && val1 == val2)
@@ -553,7 +541,7 @@ namespace EchoShift
             _player.GiveIFrames(0.25f);
             _echo.SnapTo(_player.Position);
             _positionHistory.Clear();
-            for (int i = 0; i < ECHO_HISTORY_LENGTH; i++)
+            for (var i = 0; i < ECHO_HISTORY_LENGTH; i++)
                 _positionHistory.Enqueue(_player.Position);
             _echoPoints = Math.Max(0, _echoPoints - 20);
         }
@@ -570,14 +558,14 @@ namespace EchoShift
 
         private void Shoot()
         {
-            Vector2 mousePos = Mouse.GetState().Position.ToVector2();
-            Vector2 direction = mousePos - _player.Position;
+            var mousePos = Mouse.GetState().Position.ToVector2();
+            var direction = mousePos - _player.Position;
             if (direction != Vector2.Zero) direction.Normalize();
 
-            for (int i = -1; i <= 1; i++)
+            for (var i = -1; i <= 1; i++)
             {
-                Vector2 offset = new Vector2(i * 6, 0);
-                Vector2 dir = direction;
+                var offset = new Vector2(i * 6, 0);
+                var dir = direction;
                 if (i != 0) dir = Vector2.Normalize(direction + new Vector2(i * 0.15f, 0));
                 _bullets.Add(new Bullet(_player.Position + offset, dir, _player.Damage));
             }
@@ -587,7 +575,7 @@ namespace EchoShift
         private void SpawnEnemy(int type)
         {
             Vector2 pos;
-            int side = _rand.Next(4);
+            var side = _rand.Next(4);
             if (side == 0) pos = new Vector2(_rand.Next(0, _screenWidth), -50);
             else if (side == 1) pos = new Vector2(_screenWidth + 50, _rand.Next(0, _screenHeight));
             else if (side == 2) pos = new Vector2(_rand.Next(0, _screenWidth), _screenHeight + 50);
@@ -598,9 +586,9 @@ namespace EchoShift
 
         private void SpawnEchoOrbs(Vector2 pos, int totalValue)
         {
-            int count = Math.Min(3, totalValue);
-            int valueEach = totalValue / Math.Max(1, count);
-            for (int i = 0; i < count; i++)
+            var count = Math.Min(3, totalValue);
+            var valueEach = totalValue / Math.Max(1, count);
+            for (var i = 0; i < count; i++)
                 _echoOrbs.Add(new EchoOrb(pos, valueEach));
         }
 
@@ -611,7 +599,7 @@ namespace EchoShift
         {
             if (_kills >= _nextUpgradeKills)
             {
-                int upgradeIndex = _kills / 5;
+                var upgradeIndex = _kills / 5;
                 switch (upgradeIndex % 5)
                 {
                     case 0: _player.Speed += 20f; break;
@@ -648,7 +636,7 @@ namespace EchoShift
             _spawnInterval = _waveSystem.GetSpawnInterval();
 
             _positionHistory.Clear();
-            for (int i = 0; i < ECHO_HISTORY_LENGTH; i++)
+            for (var i = 0; i < ECHO_HISTORY_LENGTH; i++)
                 _positionHistory.Enqueue(_player.Position);
 
             _echo = new EchoFollower(TextureManager.DecoyTex, _player.Position, followDelayFrames: 60);
@@ -677,8 +665,7 @@ namespace EchoShift
             if (_screen == Screen.Roulette) DrawSlotMachineScreen();
             if (_isMenuOpen && _screen != Screen.GameOver) DrawPauseMenu();
 
-            // Прицел
-            MouseState mouse = Mouse.GetState();
+            var mouse = Mouse.GetState();
             _spriteBatch.Draw(_crosshairTexture, new Rectangle(mouse.X - 15, mouse.Y - 15, 31, 31), Color.White);
 
             _spriteBatch.End();
@@ -687,20 +674,20 @@ namespace EchoShift
 
         private void DrawWaveUI()
         {
-            int centerX = _screenWidth / 2;
+            var centerX = _screenWidth / 2;
 
-            string waveText = $"ВОЛНА {_waveSystem.CurrentWave}";
-            Vector2 waveSize = TinyFont.Measure(waveText, 3);
+            var waveText = $"ВОЛНА {_waveSystem.CurrentWave}";
+            var waveSize = TinyFont.Measure(waveText, 3);
             TinyFont.Draw(_spriteBatch, waveText, new Vector2(centerX - waveSize.X / 2, _screenHeight * 1 / 100), Color.Cyan, 3);
 
-            string recordText = $"РЕКОРД: {_waveSystem.HighScoreWave}";
+            var recordText = $"РЕКОРД: {_waveSystem.HighScoreWave}";
             TinyFont.Draw(_spriteBatch, recordText, new Vector2(_screenWidth - TinyFont.Measure(recordText, 2).X - _screenWidth * 1 / 100, _screenHeight * 1 / 100), Color.Gold, 2);
 
-            string killsText = $"УБИЙСТВ: {_kills}";
+            var killsText = $"УБИЙСТВ: {_kills}";
             TinyFont.Draw(_spriteBatch, killsText, new Vector2(_screenWidth - TinyFont.Measure(killsText, 2).X - _screenWidth * 1 / 100, _screenHeight * 5 / 100), Color.White, 2);
 
-            int yOffset = _screenHeight * 14 / 100;
-            int lineH = _screenHeight * 3 / 100;
+            var yOffset = _screenHeight * 14 / 100;
+            var lineH = _screenHeight * 3 / 100;
             TinyFont.Draw(_spriteBatch, "ОСТАЛОСЬ ВРАГОВ:", new Vector2(_screenWidth * 1 / 100, yOffset), Color.White, 2);
             yOffset += lineH;
             TinyFont.Draw(_spriteBatch, $"КРАСНЫХ: {_waveSystem.EnemiesTotalByType[0]}", new Vector2(_screenWidth * 1 / 100, yOffset), new Color(255, 80, 80), 2);
@@ -720,127 +707,127 @@ namespace EchoShift
 
         private void DrawGameOverScreen()
         {
-            int centerX = _screenWidth / 2;
+            var centerX = _screenWidth / 2;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, _screenWidth, _screenHeight), new Color(0, 0, 0, 220));
 
-            int panelW = _screenWidth * 50 / 100;
-            int panelH = _screenHeight * 55 / 100;
-            int panelX = (_screenWidth - panelW) / 2;
-            int panelY = _screenHeight * 20 / 100;
+            var panelW = _screenWidth * 50 / 100;
+            var panelH = _screenHeight * 55 / 100;
+            var panelX = (_screenWidth - panelW) / 2;
+            var panelY = _screenHeight * 20 / 100;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(10, 16, 18, 240));
 
-            string title = "ИГРА ОКОНЧЕНА";
+            var title = "ИГРА ОКОНЧЕНА";
             TinyFont.Draw(_spriteBatch, title, new Vector2(centerX - TinyFont.Measure(title, 4).X / 2, panelY + _screenHeight * 5 / 100), new Color(255, 80, 80), 4);
 
-            string wavesText = $"ПРОЙДЕНО ВОЛН: {_waveSystem.CurrentWave - 1}";
+            var wavesText = $"ПРОЙДЕНО ВОЛН: {_waveSystem.CurrentWave - 1}";
             TinyFont.Draw(_spriteBatch, wavesText, new Vector2(centerX - TinyFont.Measure(wavesText, 3).X / 2, panelY + _screenHeight * 14 / 100), Color.Cyan, 3);
 
-            string killsText = $"УБИТО ВРАГОВ: {_kills}";
+            var killsText = $"УБИТО ВРАГОВ: {_kills}";
             TinyFont.Draw(_spriteBatch, killsText, new Vector2(centerX - TinyFont.Measure(killsText, 3).X / 2, panelY + _screenHeight * 22 / 100), Color.Yellow, 3);
 
-            string echoText = $"ОЧКОВ ЭХА: {_echoPoints}";
+            var echoText = $"ОЧКОВ ЭХА: {_echoPoints}";
             TinyFont.Draw(_spriteBatch, echoText, new Vector2(centerX - TinyFont.Measure(echoText, 2).X / 2, panelY + _screenHeight * 30 / 100), Color.Cyan, 2);
 
             if (_waveSystem.CurrentWave - 1 == _waveSystem.HighScoreWave && _waveSystem.HighScoreWave > 0)
             {
-                string rec = "НОВЫЙ РЕКОРД!";
+                var rec = "НОВЫЙ РЕКОРД!";
                 TinyFont.Draw(_spriteBatch, rec, new Vector2(centerX - TinyFont.Measure(rec, 3).X / 2, panelY + _screenHeight * 38 / 100), Color.Gold, 3);
             }
             else if (_waveSystem.HighScoreWave > 0)
             {
-                string rec = $"РЕКОРД: {_waveSystem.HighScoreWave} ВОЛН";
+                var rec = $"РЕКОРД: {_waveSystem.HighScoreWave} ВОЛН";
                 TinyFont.Draw(_spriteBatch, rec, new Vector2(centerX - TinyFont.Measure(rec, 2).X / 2, panelY + _screenHeight * 38 / 100), new Color(200, 200, 100), 2);
             }
 
             _gameOverButtonHover = _gameOverRestartButton.Contains(Mouse.GetState().Position);
-            Color btnColor = _gameOverButtonHover ? new Color(255, 80, 80, 150) : new Color(255, 80, 80, 80);
+            var btnColor = _gameOverButtonHover ? new Color(255, 80, 80, 150) : new Color(255, 80, 80, 80);
             _spriteBatch.Draw(TextureManager.Pixel, _gameOverRestartButton, btnColor);
-            string btnText = "НАЧАТЬ ЗАНОВО";
+            var btnText = "НАЧАТЬ ЗАНОВО";
             TinyFont.Draw(_spriteBatch, btnText, new Vector2(_gameOverRestartButton.X + (_gameOverRestartButton.Width - TinyFont.Measure(btnText, 3).X) / 2, _gameOverRestartButton.Y + (_gameOverRestartButton.Height - TinyFont.Measure(btnText, 3).Y) / 2), Color.White, 3);
 
-            string hint = "R ИЛИ ENTER ДЛЯ РЕСТАРТА";
+            var hint = "R ИЛИ ENTER ДЛЯ РЕСТАРТА";
             TinyFont.Draw(_spriteBatch, hint, new Vector2(centerX - TinyFont.Measure(hint, 2).X / 2, panelY + panelH - _screenHeight * 5 / 100), new Color(150, 150, 150), 2);
         }
 
         private void DrawWaveCompleteScreen()
         {
-            int centerX = _screenWidth / 2;
+            var centerX = _screenWidth / 2;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, _screenWidth, _screenHeight), new Color(0, 0, 0, 200));
 
-            int panelW = _screenWidth * 50 / 100;
-            int panelH = _screenHeight * 65 / 100;
-            int panelX = (_screenWidth - panelW) / 2;
-            int panelY = _screenHeight * 15 / 100;
+            var panelW = _screenWidth * 50 / 100;
+            var panelH = _screenHeight * 65 / 100;
+            var panelX = (_screenWidth - panelW) / 2;
+            var panelY = _screenHeight * 15 / 100;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(10, 16, 18, 240));
-            float alpha = 0.5f + (float)Math.Sin(_waveCompleteFlashTimer * 8) * 0.5f;
+            var alpha = 0.5f + (float)Math.Sin(_waveCompleteFlashTimer * 8) * 0.5f;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, 2), new Color(0, 255, 255, alpha));
 
-            string title = $"ВОЛНА {_waveSystem.CurrentWave - 1} ЗАВЕРШЕНА!";
+            var title = $"ВОЛНА {_waveSystem.CurrentWave - 1} ЗАВЕРШЕНА!";
             TinyFont.Draw(_spriteBatch, title, new Vector2(centerX - TinyFont.Measure(title, 3).X / 2, panelY + _screenHeight * 5 / 100), Color.Cyan, 3);
 
-            string nextText = $"СЛЕДУЮЩАЯ ВОЛНА: {_waveSystem.CurrentWave}";
+            var nextText = $"СЛЕДУЮЩАЯ ВОЛНА: {_waveSystem.CurrentWave}";
             TinyFont.Draw(_spriteBatch, nextText, new Vector2(centerX - TinyFont.Measure(nextText, 2).X / 2, panelY + _screenHeight * 15 / 100), Color.Yellow, 2);
 
-            string killsText = $"УБИЙСТВ: {_kills}";
+            var killsText = $"УБИЙСТВ: {_kills}";
             TinyFont.Draw(_spriteBatch, killsText, new Vector2(centerX - TinyFont.Measure(killsText, 2).X / 2, panelY + _screenHeight * 22 / 100), Color.White, 2);
 
-            string echoText = $"ОЧКОВ ЭХА: {_echoPoints}";
+            var echoText = $"ОЧКОВ ЭХА: {_echoPoints}";
             TinyFont.Draw(_spriteBatch, echoText, new Vector2(centerX - TinyFont.Measure(echoText, 2).X / 2, panelY + _screenHeight * 28 / 100), Color.Cyan, 2);
 
-            Color nextCol = _nextWaveButtonHover ? new Color(0, 255, 255, 150) : new Color(0, 255, 255, 80);
+            var nextCol = _nextWaveButtonHover ? new Color(0, 255, 255, 150) : new Color(0, 255, 255, 80);
             _spriteBatch.Draw(TextureManager.Pixel, _nextWaveButton, nextCol);
-            string nextBtn = "СЛЕДУЮЩАЯ ВОЛНА";
+            var nextBtn = "СЛЕДУЮЩАЯ ВОЛНА";
             TinyFont.Draw(_spriteBatch, nextBtn, new Vector2(_nextWaveButton.X + (_nextWaveButton.Width - TinyFont.Measure(nextBtn, 3).X) / 2, _nextWaveButton.Y + (_nextWaveButton.Height - TinyFont.Measure(nextBtn, 3).Y) / 2), Color.White, 3);
 
-            Color restartCol = _restartWaveButtonHover ? new Color(255, 80, 80, 150) : new Color(255, 80, 80, 80);
+            var restartCol = _restartWaveButtonHover ? new Color(255, 80, 80, 150) : new Color(255, 80, 80, 80);
             _spriteBatch.Draw(TextureManager.Pixel, _restartWaveButton, restartCol);
-            string restartBtn = "НАЧАТЬ ЗАНОВО";
+            var restartBtn = "НАЧАТЬ ЗАНОВО";
             TinyFont.Draw(_spriteBatch, restartBtn, new Vector2(_restartWaveButton.X + (_restartWaveButton.Width - TinyFont.Measure(restartBtn, 3).X) / 2, _restartWaveButton.Y + (_restartWaveButton.Height - TinyFont.Measure(restartBtn, 3).Y) / 2), Color.White, 3);
 
-            string hint = "ENTER - ДАЛЕЕ    R - РЕСТАРТ    ESC - ЗАКРЫТЬ";
+            var hint = "ENTER - ДАЛЕЕ    R - РЕСТАРТ    ESC - ЗАКРЫТЬ";
             TinyFont.Draw(_spriteBatch, hint, new Vector2(centerX - TinyFont.Measure(hint, 2).X / 2, panelY + panelH - _screenHeight * 8 / 100), new Color(150, 150, 150), 2);
         }
 
         private void DrawSlotMachineScreen()
         {
-            int centerX = _screenWidth / 2;
+            var centerX = _screenWidth / 2;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, _screenWidth, _screenHeight), new Color(0, 0, 0, 220));
 
-            int panelW = _screenWidth * 70 / 100;
-            int panelH = _screenHeight * 75 / 100;
-            int panelX = (_screenWidth - panelW) / 2;
-            int panelY = _screenHeight * 10 / 100;
+            var panelW = _screenWidth * 70 / 100;
+            var panelH = _screenHeight * 75 / 100;
+            var panelX = (_screenWidth - panelW) / 2;
+            var panelY = _screenHeight * 10 / 100;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(10, 16, 18, 240));
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, 2), new Color(255, 215, 0, 160));
 
-            string title = "СЛОТ 3x3";
+            var title = "СЛОТ 3x3";
             TinyFont.Draw(_spriteBatch, title, new Vector2(centerX - TinyFont.Measure(title, 4).X / 2, panelY + _screenHeight * 2 / 100), Color.Gold, 4);
 
-            string pointsText = $"ОЧКОВ: {_echoPoints}";
+            var pointsText = $"ОЧКОВ: {_echoPoints}";
             TinyFont.Draw(_spriteBatch, pointsText, new Vector2(centerX - TinyFont.Measure(pointsText, 2).X / 2, panelY + _screenHeight * 8 / 100), Color.Cyan, 2);
 
-            int cellSize = _screenWidth * 7 / 100;
-            int cellSpacing = _screenWidth * 1 / 100;
-            int tableWidth = 3 * cellSize + 2 * cellSpacing;
-            int startX = centerX - tableWidth / 2;
-            int tableY = panelY + _screenHeight * 16 / 100;
-            int fontSize = 3;
+            var cellSize = _screenWidth * 7 / 100;
+            var cellSpacing = _screenWidth * 1 / 100;
+            var tableWidth = 3 * cellSize + 2 * cellSpacing;
+            var startX = centerX - tableWidth / 2;
+            var tableY = panelY + _screenHeight * 16 / 100;
+            var fontSize = 3;
 
-            for (int row = 0; row < 3; row++)
+            for (var row = 0; row < 3; row++)
             {
-                for (int col = 0; col < 3; col++)
+                for (var col = 0; col < 3; col++)
                 {
-                    int x = startX + col * (cellSize + cellSpacing);
-                    int y = tableY + row * (cellSize + cellSpacing);
-                    Color bgColor = (row == 1) ? new Color(0, 40, 50, 200) : new Color(20, 20, 30, 200);
+                    var x = startX + col * (cellSize + cellSpacing);
+                    var y = tableY + row * (cellSize + cellSpacing);
+                    var bgColor = (row == 1) ? new Color(0, 40, 50, 200) : new Color(20, 20, 30, 200);
                     _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, cellSize, cellSize), bgColor);
                     _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, cellSize, 2), Color.Gray);
                     _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y + cellSize - 2, cellSize, 2), Color.Gray);
                     _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, 2, cellSize), Color.Gray);
                     _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x + cellSize - 2, y, 2, cellSize), Color.Gray);
 
-                    string digit = _slotValues[row, col].ToString();
-                    Vector2 digitSize = TinyFont.Measure(digit, fontSize);
+                    var digit = _slotValues[row, col].ToString();
+                    var digitSize = TinyFont.Measure(digit, fontSize);
                     Color digitColor;
                     switch (_slotValues[row, col])
                     {
@@ -862,28 +849,26 @@ namespace EchoShift
                 }
             }
 
-            int bottomY = panelY + panelH - _screenHeight * 14 / 100;
-            // Строка со ставкой и стрелками
-            string betLabel = "СТАВКА";
-            string betValue = _slotBets[_slotBetIndex].ToString();
-            Vector2 betLabelSize = TinyFont.Measure(betLabel, 3);
-            Vector2 betValueSize = TinyFont.Measure(betValue, 3);
-            int arrowScale = 3;
-            Vector2 arrowSize = TinyFont.Measure("<", arrowScale);
-            int totalWidth = (int)(betLabelSize.X + arrowSize.X * 2 + betValueSize.X + 20);
-            int startBetX = centerX - totalWidth / 2;
+            var bottomY = panelY + panelH - _screenHeight * 14 / 100;
+            var betLabel = "СТАВКА";
+            var betValue = _slotBets[_slotBetIndex].ToString();
+            var betLabelSize = TinyFont.Measure(betLabel, 3);
+            var betValueSize = TinyFont.Measure(betValue, 3);
+            var arrowScale = 3;
+            var arrowSize = TinyFont.Measure("<", arrowScale);
+            var totalWidth = (int)(betLabelSize.X + arrowSize.X * 2 + betValueSize.X + 20);
+            var startBetX = centerX - totalWidth / 2;
             TinyFont.Draw(_spriteBatch, betLabel, new Vector2(startBetX, bottomY), Color.White, 3);
             TinyFont.Draw(_spriteBatch, "<", new Vector2(startBetX + betLabelSize.X + 5, bottomY), new Color(0, 255, 255), arrowScale);
             TinyFont.Draw(_spriteBatch, betValue, new Vector2(startBetX + betLabelSize.X + arrowSize.X + 10, bottomY), Color.Yellow, 3);
             TinyFont.Draw(_spriteBatch, ">", new Vector2(startBetX + betLabelSize.X + arrowSize.X + betValueSize.X + 15, bottomY), new Color(0, 255, 255), arrowScale);
             bottomY += _screenHeight * 5 / 100;
 
-            // Единая строка подсказок
-            string allHints = "СТАВКА ЧЕРЕЗ СТРЕЛКИ     ПРОБЕЛ: КРУТИТЬ     ESC: ВЫЙТИ";
+            var allHints = "СТАВКА ЧЕРЕЗ СТРЕЛКИ     ПРОБЕЛ: КРУТИТЬ     ESC: ВЫЙТИ";
             TinyFont.Draw(_spriteBatch, allHints, new Vector2(centerX - TinyFont.Measure(allHints, 2).X / 2, bottomY), new Color(200, 200, 200), 2);
             bottomY += _screenHeight * 4 / 100;
 
-            string rules = "ДЖЕКПОТ: 3 ОДИНАКОВЫХ (x5)   |   ПРОГРЕССИЯ (x2)";
+            var rules = "ДЖЕКПОТ: 3 ОДИНАКОВЫХ (x5)   |   ПРОГРЕССИЯ (x2)";
             TinyFont.Draw(_spriteBatch, rules, new Vector2(centerX - TinyFont.Measure(rules, 2).X / 2, bottomY), new Color(255, 215, 0, 200), 2);
 
             if (!string.IsNullOrWhiteSpace(_slotResultText) && _slotResultTimer > 0)
@@ -892,45 +877,45 @@ namespace EchoShift
 
         private void DrawPauseMenu()
         {
-            int centerX = _screenWidth / 2;
+            var centerX = _screenWidth / 2;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, _screenWidth, _screenHeight), new Color(0, 0, 0, 180));
 
-            int panelW = _screenWidth * 35 / 100;
-            int panelH = _screenHeight * 50 / 100;
-            int panelX = (_screenWidth - panelW) / 2;
-            int panelY = _screenHeight * 25 / 100;
+            var panelW = _screenWidth * 35 / 100;
+            var panelH = _screenHeight * 50 / 100;
+            var panelX = (_screenWidth - panelW) / 2;
+            var panelY = _screenHeight * 25 / 100;
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(10, 16, 18, 240));
             _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, 2), new Color(0, 255, 255, 160));
 
-            string title = "МЕНЮ";
+            var title = "МЕНЮ";
             TinyFont.Draw(_spriteBatch, title, new Vector2(centerX - TinyFont.Measure(title, 4).X / 2, panelY + _screenHeight * 5 / 100), Color.Cyan, 4);
 
-            int btnW = _screenWidth * 25 / 100;
-            int btnH = _screenHeight * 7 / 100;
-            int btnX = (_screenWidth - btnW) / 2;
-            int yOff = panelY + _screenHeight * 15 / 100;
-            Rectangle resumeBtn = new Rectangle(btnX, yOff, btnW, btnH);
-            Rectangle restartBtn = new Rectangle(btnX, yOff + _screenHeight * 9 / 100, btnW, btnH);
-            Rectangle quitBtn = new Rectangle(btnX, yOff + _screenHeight * 18 / 100, btnW, btnH);
+            var btnW = _screenWidth * 25 / 100;
+            var btnH = _screenHeight * 7 / 100;
+            var btnX = (_screenWidth - btnW) / 2;
+            var yOff = panelY + _screenHeight * 15 / 100;
+            var resumeBtn = new Rectangle(btnX, yOff, btnW, btnH);
+            var restartBtn = new Rectangle(btnX, yOff + _screenHeight * 9 / 100, btnW, btnH);
+            var quitBtn = new Rectangle(btnX, yOff + _screenHeight * 18 / 100, btnW, btnH);
 
-            MouseState mouse = Mouse.GetState();
-            Color resumeCol = resumeBtn.Contains(mouse.Position) ? new Color(0, 255, 255, 120) : new Color(0, 255, 255, 60);
-            Color restartCol = restartBtn.Contains(mouse.Position) ? new Color(255, 80, 80, 120) : new Color(255, 80, 80, 60);
-            Color quitCol = quitBtn.Contains(mouse.Position) ? new Color(200, 50, 50, 120) : new Color(200, 50, 50, 60);
+            var mouse = Mouse.GetState();
+            var resumeCol = resumeBtn.Contains(mouse.Position) ? new Color(0, 255, 255, 120) : new Color(0, 255, 255, 60);
+            var restartCol = restartBtn.Contains(mouse.Position) ? new Color(255, 80, 80, 120) : new Color(255, 80, 80, 60);
+            var quitCol = quitBtn.Contains(mouse.Position) ? new Color(200, 50, 50, 120) : new Color(200, 50, 50, 60);
 
             _spriteBatch.Draw(TextureManager.Pixel, resumeBtn, resumeCol);
             _spriteBatch.Draw(TextureManager.Pixel, restartBtn, restartCol);
             _spriteBatch.Draw(TextureManager.Pixel, quitBtn, quitCol);
 
-            string resumeText = "ПРОДОЛЖИТЬ";
-            string restartText = "НАЧАТЬ ЗАНОВО";
-            string quitText = "ВЫХОД";
+            var resumeText = "ПРОДОЛЖИТЬ";
+            var restartText = "НАЧАТЬ ЗАНОВО";
+            var quitText = "ВЫХОД";
 
             TinyFont.Draw(_spriteBatch, resumeText, new Vector2(resumeBtn.X + (resumeBtn.Width - TinyFont.Measure(resumeText, 3).X) / 2, resumeBtn.Y + (resumeBtn.Height - TinyFont.Measure(resumeText, 3).Y) / 2), Color.White, 3);
             TinyFont.Draw(_spriteBatch, restartText, new Vector2(restartBtn.X + (restartBtn.Width - TinyFont.Measure(restartText, 3).X) / 2, restartBtn.Y + (restartBtn.Height - TinyFont.Measure(restartText, 3).Y) / 2), Color.White, 3);
             TinyFont.Draw(_spriteBatch, quitText, new Vector2(quitBtn.X + (quitBtn.Width - TinyFont.Measure(quitText, 3).X) / 2, quitBtn.Y + (quitBtn.Height - TinyFont.Measure(quitText, 3).Y) / 2), Color.White, 3);
 
-            string hint = "ENTER - ПРОДОЛЖИТЬ    R - РЕСТАРТ    Q - ВЫХОД";
+            var hint = "ENTER - ПРОДОЛЖИТЬ    R - РЕСТАРТ    Q - ВЫХОД";
             TinyFont.Draw(_spriteBatch, hint, new Vector2(centerX - TinyFont.Measure(hint, 2).X / 2, panelY + panelH - _screenHeight * 8 / 100), new Color(150, 150, 150), 2);
         }
     }

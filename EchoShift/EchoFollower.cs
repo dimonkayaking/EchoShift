@@ -7,7 +7,6 @@ using System.Linq;
 public class EchoFollower
 {
     public Vector2 Position { get; private set; }
-
     private readonly Texture2D _texture;
     private readonly int _followDelayFrames;
 
@@ -31,4 +30,3 @@ public class EchoFollower
         spriteBatch.Draw(_texture, Position, new Color(0, 255, 255, 140));
     }
 }
-

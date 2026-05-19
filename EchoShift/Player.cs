@@ -21,7 +21,6 @@ public class Player
     private AnimationHelper _currentAnim;
     private SpriteEffects _spriteEffect = SpriteEffects.None;
 
-    // Размер экрана (устанавливается из Game1)
     public static int ScreenWidth = 1280;
     public static int ScreenHeight = 720;
 
@@ -48,24 +47,18 @@ public class Player
 
     public void Update(float deltaTime, MouseState mouse, KeyboardState keyboard)
     {
-        Vector2 move = Vector2.Zero;
+        var move = Vector2.Zero;
         if (keyboard.IsKeyDown(Keys.W) || keyboard.IsKeyDown(Keys.Up)) move.Y -= 1;
         if (keyboard.IsKeyDown(Keys.S) || keyboard.IsKeyDown(Keys.Down)) move.Y += 1;
         if (keyboard.IsKeyDown(Keys.A) || keyboard.IsKeyDown(Keys.Left)) move.X -= 1;
         if (keyboard.IsKeyDown(Keys.D) || keyboard.IsKeyDown(Keys.Right)) move.X += 1;
-
-        if (move != Vector2.Zero)
-            move.Normalize();
-
+        if (move != Vector2.Zero) move.Normalize();
         Position += move * Speed * deltaTime;
-
-        // Ограничение движения в пределах экрана (размер спрайта 32x32)
         Position.X = MathHelper.Clamp(Position.X, 0, ScreenWidth - 32);
         Position.Y = MathHelper.Clamp(Position.Y, 0, ScreenHeight - 32);
 
-        // Анимация
-        bool isShooting = mouse.LeftButton == ButtonState.Pressed && _shootCooldown <= 0;
-        bool isMoving = move != Vector2.Zero;
+        var isShooting = mouse.LeftButton == ButtonState.Pressed && _shootCooldown <= 0;
+        var isMoving = move != Vector2.Zero;
 
         if (isShooting)
         {
@@ -75,36 +68,20 @@ public class Player
                 _shootAnim.Reset();
             }
         }
-        else if (isMoving)
-        {
-            _currentAnim = _walkAnim;
-        }
-        else
-        {
-            _currentAnim = _idleAnim;
-        }
+        else if (isMoving) _currentAnim = _walkAnim;
+        else _currentAnim = _idleAnim;
 
         _currentAnim.Update(deltaTime);
+        if (_shootCooldown > 0) _shootCooldown -= deltaTime;
 
-        // Перезарядка выстрела
-        if (_shootCooldown > 0)
-            _shootCooldown -= deltaTime;
-
-        // Неуязвимость
         if (IsInvincible)
         {
             _invincibleTimer -= deltaTime;
-            if (_invincibleTimer <= 0)
-                IsInvincible = false;
+            if (_invincibleTimer <= 0) IsInvincible = false;
         }
 
-        // Отражаем спрайт по направлению к мыши
-        Vector2 mousePos = mouse.Position.ToVector2();
-        if (mousePos.X < Position.X)
-            _spriteEffect = SpriteEffects.FlipHorizontally;
-        else
-            _spriteEffect = SpriteEffects.None;
-
+        var mousePos = mouse.Position.ToVector2();
+        _spriteEffect = mousePos.X < Position.X ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         IsShiftActive = false;
     }
 
