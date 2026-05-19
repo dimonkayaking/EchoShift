@@ -7,6 +7,8 @@ public class Enemy
     public Vector2 Position;
     public int Health;
     public int MaxHealth;
+    public int Shield;
+    public int MaxShield;
     public int Damage;
     public float Speed;
     public int EchoValue;
@@ -19,11 +21,13 @@ public class Enemy
     private float _shootCooldown;
     private float _shootRange;
     private int _shootDamage;
+    private int _currentWave;
 
-    public Enemy(Vector2 startPos, int type)
+    public Enemy(Vector2 startPos, int type, int currentWave = 1)
     {
         Position = startPos;
         _type = type;
+        _currentWave = currentWave;
         switch (type)
         {
             case 0:
@@ -31,7 +35,7 @@ public class Enemy
                 Health = MaxHealth;
                 Damage = 10;
                 Speed = 100f;
-                EchoValue = 1;
+                EchoValue = 0;
                 _texture = TextureManager.EnemyRed;
                 _shootCooldown = 1.2f;
                 _shootRange = 650f;
@@ -41,8 +45,8 @@ public class Enemy
                 MaxHealth = 20;
                 Health = MaxHealth;
                 Damage = 8;
-                Speed = 250f;
-                EchoValue = 1;
+                Speed = 350f;
+                EchoValue = 0;
                 _texture = TextureManager.EnemyOrange;
                 _shootCooldown = 999f;
                 _shootRange = 0f;
@@ -53,12 +57,25 @@ public class Enemy
                 Health = MaxHealth;
                 Damage = 20;
                 Speed = 50f;
-                EchoValue = 3;
+                EchoValue = 1;
                 _texture = TextureManager.EnemyPurple;
                 _shootCooldown = 0.9f;
                 _shootRange = 720f;
                 _shootDamage = 12;
                 break;
+        }
+
+        if (_currentWave >= 5)
+        {
+            float shieldPercent = 0.33f + (_currentWave - 5) * 0.05f;
+            shieldPercent = MathHelper.Min(shieldPercent, 0.8f);
+            Shield = (int)(MaxHealth * shieldPercent);
+            MaxShield = Shield;
+        }
+        else
+        {
+            Shield = 0;
+            MaxShield = 0;
         }
 
         _shootTimer = (float)new Random().NextDouble() * _shootCooldown;
@@ -93,7 +110,14 @@ public class Enemy
 
     public void TakeDamage(int amount)
     {
-        Health -= amount;
+        if (Shield > 0)
+        {
+            int shieldDamage = Math.Min(Shield, amount);
+            Shield -= shieldDamage;
+            amount -= shieldDamage;
+        }
+        if (amount > 0)
+            Health -= amount;
     }
 
     public bool CollidesWith(Player player)
@@ -103,13 +127,10 @@ public class Enemy
         return enemyRect.Intersects(playerRect);
     }
 
-    public void OnHitPlayer() { }
-
     public void Draw(SpriteBatch spriteBatch)
     {
         spriteBatch.Draw(_texture, Position, Color.White);
 
-        // HP-бар
         float hp01 = MaxHealth <= 0 ? 0f : MathHelper.Clamp((float)Health / MaxHealth, 0f, 1f);
         int barW = 32;
         int barH = 5;
@@ -117,5 +138,11 @@ public class Enemy
         int y = (int)Position.Y - 8;
         spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, barW, barH), new Color(0, 0, 0, 160));
         spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, (int)(barW * hp01), barH), Color.LimeGreen);
+
+        if (MaxShield > 0)
+        {
+            float shield01 = MathHelper.Clamp((float)Shield / MaxShield, 0f, 1f);
+            spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y - 4, (int)(barW * shield01), 3), Color.White);
+        }
     }
 }

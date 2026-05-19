@@ -11,6 +11,10 @@ public class EnemyBullet
     public int Damage;
     public bool IsExpired { get; set; }
 
+    // Размер экрана (устанавливается из Game1)
+    public static int ScreenWidth = 1280;
+    public static int ScreenHeight = 720;
+
     public EnemyBullet(Vector2 startPos, Vector2 direction, int damage, float range = 900f)
     {
         Position = startPos;
@@ -27,8 +31,13 @@ public class EnemyBullet
         float step = _speed * deltaTime;
         Position += _direction * step;
         _distanceTraveled += step;
-        if (_distanceTraveled >= _range) IsExpired = true;
-        if (Position.X < -120 || Position.X > 1400 || Position.Y < -120 || Position.Y > 840)
+
+        if (_distanceTraveled >= _range)
+            IsExpired = true;
+
+        // Удаление при выходе за границы экрана
+        if (Position.X < -120 || Position.X > ScreenWidth + 120 ||
+            Position.Y < -120 || Position.Y > ScreenHeight + 120)
             IsExpired = true;
     }
 
@@ -44,4 +53,3 @@ public class EnemyBullet
         spriteBatch.Draw(TextureManager.Pixel, new Rectangle((int)Position.X, (int)Position.Y, 6, 6), Color.OrangeRed);
     }
 }
-

@@ -11,6 +11,10 @@ public class Bullet
     public int Damage;
     public bool IsExpired { get; set; }
 
+    // Размер экрана (устанавливается из Game1)
+    public static int ScreenWidth = 1280;
+    public static int ScreenHeight = 720;
+
     public Bullet(Vector2 startPos, Vector2 direction, int damage, float range = 800f)
     {
         Position = startPos;
@@ -27,8 +31,14 @@ public class Bullet
         float step = _speed * deltaTime;
         Position += _direction * step;
         _distanceTraveled += step;
-        if (_distanceTraveled >= _range) IsExpired = true;
-        if (Position.X < -100 || Position.X > 1380 || Position.Y < -100 || Position.Y > 820)
+
+        // Удаление по дальности
+        if (_distanceTraveled >= _range)
+            IsExpired = true;
+
+        // Удаление при выходе за границы экрана (с запасом)
+        if (Position.X < -100 || Position.X > ScreenWidth + 100 ||
+            Position.Y < -100 || Position.Y > ScreenHeight + 100)
             IsExpired = true;
     }
 

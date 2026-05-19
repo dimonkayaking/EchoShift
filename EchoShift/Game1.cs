@@ -3,7 +3,6 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace EchoShift
 {
@@ -14,6 +13,7 @@ namespace EchoShift
             Playing,
             Roulette,
             GameOver,
+            WaveComplete,
         }
 
         private GraphicsDeviceManager _graphics;
@@ -27,47 +27,81 @@ namespace EchoShift
         private List<EnemyBullet> _enemyBullets;
         private List<EchoOrb> _echoOrbs;
         private int _kills;
-        private int _echoPoints;     // очки, которые падают с врагов
+        private int _echoPoints;
         private float _spawnTimer;
         private float _spawnInterval;
         private float _gameTimer;
         private bool _isMenuOpen;
         private Screen _screen;
 
-        // История для "эха" (задержка движения)
+        private WaveSystem _waveSystem;
+
         private Queue<Vector2> _positionHistory;
-        private const int ECHO_HISTORY_LENGTH = 120; // ~2 секунды при 60 FPS
+        private const int ECHO_HISTORY_LENGTH = 120;
 
         private KeyboardState _prevKeyboard;
         private MouseState _prevMouse;
         private Random _rand = new Random();
 
-        // Рулетка
-        private int _rouletteBetIndex;
-        private readonly int[] _rouletteBets = new[] { 10, 20, 50, 100 };
-        private string _rouletteResultText;
-        private float _rouletteResultTimer;
-
-        // Система улучшений
         private int _nextUpgradeKills = 5;
         private int _upgradeStep = 5;
+
+        private Rectangle _nextWaveButton;
+        private Rectangle _restartWaveButton;
+        private bool _nextWaveButtonHover;
+        private bool _restartWaveButtonHover;
+        private float _waveCompleteFlashTimer;
+
+        private Rectangle _gameOverRestartButton;
+        private bool _gameOverButtonHover;
+
+        // Рулетка
+        private bool _isSlotSpinning;
+        private float _slotSpinTimer;
+        private const float SLOT_SPIN_DURATION = 2.2f;
+        private int[,] _slotValues;
+        private int _slotBetIndex;
+        private readonly int[] _slotBets = new[] { 10, 20, 50, 100 };
+        private string _slotResultText;
+        private float _slotResultTimer;
+
+        // Прицел
+        private Texture2D _crosshairTexture;
+
+        private int _screenWidth;
+        private int _screenHeight;
 
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
-            IsMouseVisible = true;
-            _graphics.PreferredBackBufferWidth = 1280;
-            _graphics.PreferredBackBufferHeight = 720;
+            IsMouseVisible = false;
+
+            // Оконный режим без рамки, растянутый на весь экран (панель задач видна)
+            int screenWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
+            int screenHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
+            _graphics.PreferredBackBufferWidth = screenWidth;
+            _graphics.PreferredBackBufferHeight = screenHeight;
+            _graphics.IsFullScreen = false;
             _graphics.ApplyChanges();
+
+            Window.IsBorderless = true;
+            Window.Position = new Point(0, 0);
         }
 
         protected override void Initialize()
         {
-            // Передаём GraphicsDevice в статический сервис (нужно для создания текстур-заглушек)
             GameServices.GraphicsDevice = GraphicsDevice;
+            _screenWidth = _graphics.PreferredBackBufferWidth;
+            _screenHeight = _graphics.PreferredBackBufferHeight;
 
-            // Инициализируем списки и базовые переменные
+            Player.ScreenWidth = _screenWidth;
+            Player.ScreenHeight = _screenHeight;
+            Bullet.ScreenWidth = _screenWidth;
+            Bullet.ScreenHeight = _screenHeight;
+            EnemyBullet.ScreenWidth = _screenWidth;
+            EnemyBullet.ScreenHeight = _screenHeight;
+
             _enemies = new List<Enemy>();
             _bullets = new List<Bullet>();
             _enemyBullets = new List<EnemyBullet>();
@@ -79,14 +113,23 @@ namespace EchoShift
             _gameTimer = 0f;
             _isMenuOpen = false;
             _screen = Screen.Playing;
-            _rouletteBetIndex = 0;
-            _rouletteResultText = "";
-            _rouletteResultTimer = 0f;
+            _waveCompleteFlashTimer = 0f;
 
-            // Очереди истории
+            _waveSystem = new WaveSystem();
+            _waveSystem.StartWave();
+
             _positionHistory = new Queue<Vector2>();
             _prevKeyboard = Keyboard.GetState();
             _prevMouse = Mouse.GetState();
+
+            _slotValues = new int[3, 3];
+            _slotBetIndex = 0;
+            _isSlotSpinning = false;
+            _slotResultText = "";
+            _slotResultTimer = 0f;
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                    _slotValues[i, j] = _rand.Next(0, 10);
 
             _ui = new UI();
 
@@ -96,24 +139,45 @@ namespace EchoShift
         protected override void LoadContent()
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
-
-            // 1. Загружаем все текстуры через TextureManager (создаются программно)
             TextureManager.Load(Content);
-
-            // 2. Загружаем шрифт для UI (если есть)
             _ui.LoadContent(Content);
 
-            // 3. Теперь создаём игрока (анимации используют уже загруженные текстуры)
-            _player = new Player(new Vector2(640, 360));
-            _player.LoadContent();  // если нужна дополнительная загрузка (здесь пусто)
+            // Создаём прицел – две пересекающиеся линии с разрывом в центре, толщиной 2 пикселя
+            _crosshairTexture = new Texture2D(GraphicsDevice, 31, 31);
+            Color[] data = new Color[31 * 31];
+            for (int i = 0; i < data.Length; i++) data[i] = Color.Transparent;
 
-            // 4. Заполняем историю начальными значениями
-            for (int i = 0; i < ECHO_HISTORY_LENGTH; i++)
+            int center = 15;   // центральный пиксель (0-30)
+            int gap = 4;       // разрыв в центре (4 пикселя от центра в каждую сторону)
+
+            // Горизонтальная линия (толщина 2 пикселя: строки center-1 и center)
+            for (int y = center - 1; y <= center; y++)
             {
-                _positionHistory.Enqueue(_player.Position);
+                for (int x = 0; x < 31; x++)
+                {
+                    if (Math.Abs(x - center) > gap)
+                        data[y * 31 + x] = Color.White;
+                }
             }
 
-            // 5. Создаём "эхо", которое следует с задержкой
+            // Вертикальная линия (толщина 2 пикселя: столбцы center-1 и center)
+            for (int x = center - 1; x <= center; x++)
+            {
+                for (int y = 0; y < 31; y++)
+                {
+                    if (Math.Abs(y - center) > gap)
+                        data[y * 31 + x] = Color.White;
+                }
+            }
+
+            _crosshairTexture.SetData(data);
+
+            _player = new Player(new Vector2(_screenWidth / 2, _screenHeight / 2));
+            _player.LoadContent();
+
+            for (int i = 0; i < ECHO_HISTORY_LENGTH; i++)
+                _positionHistory.Enqueue(_player.Position);
+
             _echo = new EchoFollower(TextureManager.DecoyTex, _player.Position, followDelayFrames: 60);
         }
 
@@ -123,11 +187,25 @@ namespace EchoShift
             if (deltaTime > 0.033f) deltaTime = 0.033f;
 
             KeyboardState keyboard = Keyboard.GetState();
+            MouseState mouse = Mouse.GetState();
+
+            _screenWidth = _graphics.PreferredBackBufferWidth;
+            _screenHeight = _graphics.PreferredBackBufferHeight;
+
+            if (keyboard.IsKeyDown(Keys.F11) && !_prevKeyboard.IsKeyDown(Keys.F11))
+            {
+                _graphics.IsFullScreen = !_graphics.IsFullScreen;
+                _graphics.ApplyChanges();
+            }
+
             if (keyboard.IsKeyDown(Keys.Escape) && !_prevKeyboard.IsKeyDown(Keys.Escape))
             {
-                // Esc всегда открывает/закрывает меню-оверлей (кроме рулетки, там Esc = назад)
-                if (_screen == Screen.Playing || _screen == Screen.GameOver)
+                if (_screen == Screen.Playing)
                     _isMenuOpen = !_isMenuOpen;
+                else if (_screen == Screen.WaveComplete)
+                    _screen = Screen.Playing;
+                else if (_screen == Screen.Roulette)
+                    _screen = Screen.Playing;
             }
 
             if (_screen == Screen.GameOver)
@@ -136,91 +214,119 @@ namespace EchoShift
                     RestartGame();
                 if (keyboard.IsKeyDown(Keys.Enter) && !_prevKeyboard.IsKeyDown(Keys.Enter))
                     RestartGame();
-                // меню в game over рисуется через оверлей
-            }
-            if (_screen == Screen.Roulette)
-            {
-                UpdateRoulette(deltaTime, keyboard);
+
+                bool click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
+                int btnW = _screenWidth * 25 / 100;
+                int btnH = _screenHeight * 8 / 100;
+                int btnX = (_screenWidth - btnW) / 2;
+                int btnY = _screenHeight * 65 / 100;
+                _gameOverRestartButton = new Rectangle(btnX, btnY, btnW, btnH);
+                _gameOverButtonHover = _gameOverRestartButton.Contains(mouse.Position);
+                if (click && _gameOverButtonHover)
+                    RestartGame();
+
                 _prevKeyboard = keyboard;
+                _prevMouse = mouse;
+                base.Update(gameTime);
                 return;
             }
-            if (_isMenuOpen)
-            {
-                // управление в меню (даже если нет шрифта — кнопки есть, но хоткеи работают всегда)
-                if (keyboard.IsKeyDown(Keys.Enter) && !_prevKeyboard.IsKeyDown(Keys.Enter))
-                {
-                    if (_screen == Screen.GameOver) RestartGame();
-                    else _isMenuOpen = false; // Resume
-                }
-                if (keyboard.IsKeyDown(Keys.R) && !_prevKeyboard.IsKeyDown(Keys.R))
-                    RestartGame();
-                if (keyboard.IsKeyDown(Keys.Q) && !_prevKeyboard.IsKeyDown(Keys.Q))
-                {
-                    if (_screen != Screen.GameOver) Exit();
-                }
 
-                // клики мышью по 3 кнопкам
-                MouseState mouse = Mouse.GetState();
+            if (_screen == Screen.WaveComplete)
+            {
+                _waveCompleteFlashTimer += deltaTime;
+                int btnW = _screenWidth * 25 / 100;
+                int btnH = _screenHeight * 8 / 100;
+                int btnX = (_screenWidth - btnW) / 2;
+                _nextWaveButton = new Rectangle(btnX, _screenHeight * 45 / 100, btnW, btnH);
+                _restartWaveButton = new Rectangle(btnX, _screenHeight * 55 / 100, btnW, btnH);
+                Point mousePos = mouse.Position;
+                _nextWaveButtonHover = _nextWaveButton.Contains(mousePos);
+                _restartWaveButtonHover = _restartWaveButton.Contains(mousePos);
                 bool click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
                 if (click)
                 {
-                    Point p = mouse.Position;
-                    var (resume, restart, quit) = GetMenuButtons();
-                    if (_screen == Screen.GameOver)
-                    {
-                        if (restart.Contains(p)) RestartGame();
-                    }
-                    else
-                    {
-                        if (resume.Contains(p)) _isMenuOpen = false;
-                        else if (restart.Contains(p)) RestartGame();
-                        else if (quit.Contains(p)) Exit();
-                    }
+                    if (_nextWaveButtonHover) NextWave();
+                    else if (_restartWaveButtonHover) RestartGame();
                 }
+                if (keyboard.IsKeyDown(Keys.Enter) && !_prevKeyboard.IsKeyDown(Keys.Enter))
+                    NextWave();
+                if (keyboard.IsKeyDown(Keys.R) && !_prevKeyboard.IsKeyDown(Keys.R))
+                    RestartGame();
 
                 _prevKeyboard = keyboard;
-                _prevMouse = Mouse.GetState();
+                _prevMouse = mouse;
+                base.Update(gameTime);
                 return;
             }
 
-            // Сохраняем историю позиций для "эха"
+            if (_screen == Screen.Roulette)
+            {
+                UpdateSlotMachine(deltaTime, keyboard);
+                _prevKeyboard = keyboard;
+                _prevMouse = mouse;
+                base.Update(gameTime);
+                return;
+            }
+
+            if (_isMenuOpen)
+            {
+                bool click = mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
+                int btnW = _screenWidth * 25 / 100;
+                int btnH = _screenHeight * 7 / 100;
+                int btnX = (_screenWidth - btnW) / 2;
+                Rectangle resumeRect = new Rectangle(btnX, _screenHeight * 38 / 100, btnW, btnH);
+                Rectangle restartRect = new Rectangle(btnX, _screenHeight * 48 / 100, btnW, btnH);
+                Rectangle quitRect = new Rectangle(btnX, _screenHeight * 58 / 100, btnW, btnH);
+                if (click)
+                {
+                    if (resumeRect.Contains(mouse.Position)) _isMenuOpen = false;
+                    else if (restartRect.Contains(mouse.Position)) RestartGame();
+                    else if (quitRect.Contains(mouse.Position)) Exit();
+                }
+                if (keyboard.IsKeyDown(Keys.Enter) && !_prevKeyboard.IsKeyDown(Keys.Enter))
+                    _isMenuOpen = false;
+                if (keyboard.IsKeyDown(Keys.R) && !_prevKeyboard.IsKeyDown(Keys.R))
+                    RestartGame();
+                if (keyboard.IsKeyDown(Keys.Q) && !_prevKeyboard.IsKeyDown(Keys.Q))
+                    Exit();
+
+                _prevKeyboard = keyboard;
+                _prevMouse = mouse;
+                base.Update(gameTime);
+                return;
+            }
+
+            // MAIN GAMEPLAY
             _positionHistory.Enqueue(_player.Position);
             if (_positionHistory.Count > ECHO_HISTORY_LENGTH) _positionHistory.Dequeue();
 
-            // Обновление игрока
             _player.Update(deltaTime, Mouse.GetState(), keyboard);
-
-            // Обновление "эха"
             _echo.Update(_positionHistory);
 
-            // Телепорт к "эху" (Shift)
             bool shiftDown = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
             bool prevShiftDown = _prevKeyboard.IsKeyDown(Keys.LeftShift) || _prevKeyboard.IsKeyDown(Keys.RightShift);
             if (shiftDown && !prevShiftDown && GetTeleportsAvailable() > 0)
-            {
                 TeleportToEcho();
-            }
 
-            // Хил (Пробел)
             if (keyboard.IsKeyDown(Keys.Space) && !_prevKeyboard.IsKeyDown(Keys.Space))
-            {
                 HealPlayer();
-            }
+
             if (keyboard.IsKeyDown(Keys.Tab) && !_prevKeyboard.IsKeyDown(Keys.Tab))
             {
                 _screen = Screen.Roulette;
-                _rouletteResultText = "";
-                _rouletteResultTimer = 0f;
+                _slotResultText = "";
+                _slotResultTimer = 0f;
+                _isSlotSpinning = false;
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 3; j++)
+                        _slotValues[i, j] = _rand.Next(0, 10);
             }
 
-            // Стрельба (ЛКМ)
             MouseState mouseNow = Mouse.GetState();
             if (mouseNow.LeftButton == ButtonState.Pressed && _player.CanShoot(deltaTime))
-            {
                 Shoot();
-            }
 
-            // Обновление пуль
+            // Пули игрока
             for (int i = 0; i < _bullets.Count; i++)
             {
                 _bullets[i].Update(deltaTime);
@@ -231,7 +337,7 @@ namespace EchoShift
                 }
             }
 
-            // Обновление вражеских пуль
+            // Вражеские пули
             for (int i = 0; i < _enemyBullets.Count; i++)
             {
                 _enemyBullets[i].Update(deltaTime);
@@ -239,11 +345,7 @@ namespace EchoShift
                 {
                     _player.TakeDamage(_enemyBullets[i].Damage);
                     _enemyBullets[i].IsExpired = true;
-                    if (_player.Health <= 0)
-                    {
-                        _screen = Screen.GameOver;
-                        _isMenuOpen = true;
-                    }
+                    if (_player.Health <= 0) _screen = Screen.GameOver;
                 }
                 if (_enemyBullets[i].IsExpired)
                 {
@@ -252,35 +354,31 @@ namespace EchoShift
                 }
             }
 
-            // Обновление врагов, столкновения с пулями и игроком
+            // Враги
             for (int i = 0; i < _enemies.Count; i++)
             {
                 _enemies[i].Update(deltaTime, _player.Position, decoyPos: null);
 
-                // Столкновение с игроком
                 if (_enemies[i].IsMelee && _enemies[i].CollidesWith(_player) && !_player.IsInvincible)
                 {
                     _player.TakeDamage(_enemies[i].Damage);
-                    if (_player.Health <= 0)
-                        _screen = Screen.GameOver;
+                    if (_player.Health <= 0) _screen = Screen.GameOver;
                 }
 
-                // Стрельба медленных врагов
                 if (_enemies[i].TryShoot(_player.Position, out Vector2 dir, out int dmg))
-                {
                     _enemyBullets.Add(new EnemyBullet(_enemies[i].Position + new Vector2(16, 16), dir, dmg));
-                }
 
-                // Столкновения с пулями
                 for (int j = 0; j < _bullets.Count; j++)
                 {
                     if (_bullets[j].CollidesWith(_enemies[i]))
                     {
+                        int enemyType = _enemies[i].IsMelee ? 1 : (_enemies[i].MaxHealth > 50 ? 2 : 0);
                         _enemies[i].TakeDamage(_player.Damage);
                         _bullets[j].IsExpired = true;
                         if (_enemies[i].IsDead)
                         {
                             _kills++;
+                            _waveSystem.OnEnemyKilled(enemyType);
                             SpawnEchoOrbs(_enemies[i].Position, _enemies[i].EchoValue);
                             _enemies.RemoveAt(i);
                             i--;
@@ -290,35 +388,163 @@ namespace EchoShift
                 }
             }
 
-            // Притягивание сфер Эхо к игроку
+            _waveSystem.Update(deltaTime, _enemies);
+            if (_waveSystem.IsWaveComplete && _screen == Screen.Playing)
+            {
+                _screen = Screen.WaveComplete;
+                _waveCompleteFlashTimer = 0f;
+                _echoPoints += 10 + _waveSystem.CurrentWave * 2;
+            }
+
+            // Спавн врагов
+            if (_waveSystem.IsWaveInProgress && _waveSystem.HasEnemiesToSpawn())
+            {
+                _spawnTimer += deltaTime;
+                _spawnInterval = _waveSystem.GetSpawnInterval();
+                if (_spawnTimer >= _spawnInterval)
+                {
+                    _spawnTimer = 0;
+                    int type = _waveSystem.GetNextEnemyType();
+                    SpawnEnemy(type);
+                    _waveSystem.OnEnemySpawned(type);
+                }
+            }
+
             for (int i = 0; i < _echoOrbs.Count; i++)
             {
                 _echoOrbs[i].Update(deltaTime, _player.Position);
                 if (_echoOrbs[i].Collected)
                 {
-                    AddEchoPoints(_echoOrbs[i].Value);
+                    _echoPoints += _echoOrbs[i].Value;
                     _echoOrbs.RemoveAt(i);
                     i--;
                 }
             }
 
-            // Спавн врагов
-            _spawnTimer += deltaTime;
-            if (_spawnTimer >= _spawnInterval)
-            {
-                _spawnTimer = 0;
-                SpawnEnemy();
-                // Увеличиваем сложность: интервал спавна уменьшается со временем
-                _spawnInterval = Math.Max(0.8f, 2.0f - _gameTimer / 120f);
-            }
-
-            // Проверка улучшений за убийства
             CheckUpgrades();
-
             _gameTimer += deltaTime;
             _prevKeyboard = keyboard;
             _prevMouse = mouseNow;
             base.Update(gameTime);
+        }
+
+        private void UpdateSlotMachine(float deltaTime, KeyboardState keyboard)
+        {
+            if (keyboard.IsKeyDown(Keys.Escape) && !_prevKeyboard.IsKeyDown(Keys.Escape))
+            {
+                _screen = Screen.Playing;
+                return;
+            }
+
+            if (!_isSlotSpinning)
+            {
+                if (keyboard.IsKeyDown(Keys.Left) && !_prevKeyboard.IsKeyDown(Keys.Left))
+                    _slotBetIndex = (_slotBetIndex + _slotBets.Length - 1) % _slotBets.Length;
+                if (keyboard.IsKeyDown(Keys.Right) && !_prevKeyboard.IsKeyDown(Keys.Right))
+                    _slotBetIndex = (_slotBetIndex + 1) % _slotBets.Length;
+                if (keyboard.IsKeyDown(Keys.Up) && !_prevKeyboard.IsKeyDown(Keys.Up))
+                {
+                    int newBet = _slotBets[_slotBetIndex] + 10;
+                    int bestIdx = _slotBetIndex;
+                    for (int i = 0; i < _slotBets.Length; i++)
+                        if (_slotBets[i] >= newBet && _slotBets[i] < _slotBets[bestIdx])
+                            bestIdx = i;
+                    if (_slotBets[bestIdx] < newBet) bestIdx = _slotBets.Length - 1;
+                    _slotBetIndex = bestIdx;
+                }
+                if (keyboard.IsKeyDown(Keys.Down) && !_prevKeyboard.IsKeyDown(Keys.Down))
+                {
+                    int newBet = _slotBets[_slotBetIndex] - 10;
+                    int bestIdx = _slotBetIndex;
+                    for (int i = _slotBets.Length - 1; i >= 0; i--)
+                        if (_slotBets[i] <= newBet && _slotBets[i] > _slotBets[bestIdx])
+                            bestIdx = i;
+                    if (_slotBets[bestIdx] > newBet) bestIdx = 0;
+                    _slotBetIndex = bestIdx;
+                }
+            }
+
+            if (keyboard.IsKeyDown(Keys.Space) && !_prevKeyboard.IsKeyDown(Keys.Space) && !_isSlotSpinning)
+            {
+                int bet = _slotBets[_slotBetIndex];
+                if (_echoPoints >= bet)
+                {
+                    _echoPoints -= bet;
+                    _isSlotSpinning = true;
+                    _slotSpinTimer = 0f;
+                    _slotResultText = "";
+                }
+                else
+                {
+                    _slotResultText = "НЕ ХВАТАЕТ ОЧКОВ";
+                    _slotResultTimer = 1.0f;
+                }
+            }
+
+            if (_isSlotSpinning)
+            {
+                _slotSpinTimer += deltaTime;
+                for (int col = 0; col < 3; col++)
+                    for (int row = 0; row < 3; row++)
+                        _slotValues[row, col] = _rand.Next(0, 10);
+
+                if (_slotSpinTimer >= SLOT_SPIN_DURATION)
+                {
+                    _isSlotSpinning = false;
+                    // Генерация финальных значений (честная случайность)
+                    for (int col = 0; col < 3; col++)
+                    {
+                        int[] colValues = new int[3];
+                        for (int row = 0; row < 3; row++)
+                            colValues[row] = _rand.Next(0, 10);
+                        for (int row = 0; row < 3; row++)
+                            _slotValues[row, col] = colValues[row];
+                    }
+
+                    int val0 = _slotValues[1, 0];
+                    int val1 = _slotValues[1, 1];
+                    int val2 = _slotValues[1, 2];
+                    int bet = _slotBets[_slotBetIndex];
+                    int win = 0;
+                    string resultMsg = "";
+
+                    if (val0 == val1 && val1 == val2)
+                    {
+                        win = bet * 5;
+                        resultMsg = $"ДЖЕКПОТ! +{win}";
+                    }
+                    else if ((val1 - val0) == (val2 - val1) && (val1 - val0) != 0)
+                    {
+                        win = bet * 2;
+                        resultMsg = $"ПРОГРЕССИЯ! +{win}";
+                    }
+                    else
+                    {
+                        win = 0;
+                        resultMsg = "ПРОИГРЫШ";
+                    }
+
+                    if (win > 0)
+                        _echoPoints += win;
+                    _slotResultText = resultMsg;
+                    _slotResultTimer = 2.0f;
+                }
+            }
+            else
+            {
+                if (_slotResultTimer > 0) _slotResultTimer -= deltaTime;
+                else _slotResultText = "";
+            }
+        }
+
+        private void NextWave()
+        {
+            _enemies.Clear();
+            _waveSystem.NextWave();
+            _spawnTimer = 0;
+            _spawnInterval = _waveSystem.GetSpawnInterval();
+            _screen = Screen.Playing;
+            _player.Health = Math.Min(_player.MaxHealth, _player.Health + 15);
         }
 
         private void TeleportToEcho()
@@ -326,23 +552,18 @@ namespace EchoShift
             _player.Position = _echo.Position;
             _player.GiveIFrames(0.25f);
             _echo.SnapTo(_player.Position);
-
             _positionHistory.Clear();
             for (int i = 0; i < ECHO_HISTORY_LENGTH; i++)
                 _positionHistory.Enqueue(_player.Position);
-
-            // Потратить очки (20 очков за телепорт)
             _echoPoints = Math.Max(0, _echoPoints - 20);
         }
 
         private void HealPlayer()
         {
-            // Хил за Echo-очки: 20 Echo = +30 HP
             const int cost = 20;
             const int heal = 30;
             if (_echoPoints < cost) return;
             if (_player.Health >= _player.MaxHealth) return;
-
             _echoPoints -= cost;
             _player.Health = Math.Min(_player.MaxHealth, _player.Health + heal);
         }
@@ -353,163 +574,84 @@ namespace EchoShift
             Vector2 direction = mousePos - _player.Position;
             if (direction != Vector2.Zero) direction.Normalize();
 
-            // Выпускаем 3 пули с небольшим разбросом
             for (int i = -1; i <= 1; i++)
             {
                 Vector2 offset = new Vector2(i * 6, 0);
                 Vector2 dir = direction;
                 if (i != 0) dir = Vector2.Normalize(direction + new Vector2(i * 0.15f, 0));
-                Bullet bullet = new Bullet(_player.Position + offset, dir, _player.Damage);
-                _bullets.Add(bullet);
+                _bullets.Add(new Bullet(_player.Position + offset, dir, _player.Damage));
             }
             _player.ResetShootCooldown();
         }
 
-        private void SpawnEnemy()
+        private void SpawnEnemy(int type)
         {
-            Random rand = new Random();
             Vector2 pos;
-            int side = rand.Next(4);
-            if (side == 0) pos = new Vector2(rand.Next(0, 1280), -50);
-            else if (side == 1) pos = new Vector2(1280 + 50, rand.Next(0, 720));
-            else if (side == 2) pos = new Vector2(rand.Next(0, 1280), 720 + 50);
-            else pos = new Vector2(-50, rand.Next(0, 720));
+            int side = _rand.Next(4);
+            if (side == 0) pos = new Vector2(_rand.Next(0, _screenWidth), -50);
+            else if (side == 1) pos = new Vector2(_screenWidth + 50, _rand.Next(0, _screenHeight));
+            else if (side == 2) pos = new Vector2(_rand.Next(0, _screenWidth), _screenHeight + 50);
+            else pos = new Vector2(-50, _rand.Next(0, _screenHeight));
 
-            int type = rand.Next(3);
-            Enemy enemy = new Enemy(pos, type);
-            _enemies.Add(enemy);
+            _enemies.Add(new Enemy(pos, type, _waveSystem.CurrentWave));
         }
 
         private void SpawnEchoOrbs(Vector2 pos, int totalValue)
         {
             int count = Math.Min(3, totalValue);
-            int valueEach = totalValue / count;
+            int valueEach = totalValue / Math.Max(1, count);
             for (int i = 0; i < count; i++)
-            {
                 _echoOrbs.Add(new EchoOrb(pos, valueEach));
-            }
-        }
-
-        private void AddEchoPoints(int value)
-        {
-            _echoPoints += Math.Max(0, value);
         }
 
         private int GetTeleportsAvailable() => _echoPoints / 20;
         private int GetEchoProgress() => Math.Min(20, _echoPoints);
 
-        private (Rectangle resume, Rectangle restart, Rectangle quit) GetMenuButtons()
-        {
-            if (_screen == Screen.GameOver)
-            {
-                Rectangle onlyRestart = new Rectangle(500, 340, 280, 60);
-                return (Rectangle.Empty, onlyRestart, Rectangle.Empty);
-            }
-
-            Rectangle btnResume = new Rectangle(500, 270, 280, 50);
-            Rectangle btnRestart = new Rectangle(500, 340, 280, 50);
-            Rectangle btnQuit = new Rectangle(500, 410, 280, 50);
-            return (btnResume, btnRestart, btnQuit);
-        }
-
-        private void UpdateRoulette(float deltaTime, KeyboardState keyboard)
-        {
-            if (keyboard.IsKeyDown(Keys.Escape) && !_prevKeyboard.IsKeyDown(Keys.Escape))
-            {
-                _screen = Screen.Playing;
-                return;
-            }
-
-            if (keyboard.IsKeyDown(Keys.Left) && !_prevKeyboard.IsKeyDown(Keys.Left))
-                _rouletteBetIndex = (_rouletteBetIndex + _rouletteBets.Length - 1) % _rouletteBets.Length;
-            if (keyboard.IsKeyDown(Keys.Right) && !_prevKeyboard.IsKeyDown(Keys.Right))
-                _rouletteBetIndex = (_rouletteBetIndex + 1) % _rouletteBets.Length;
-
-            if (_rouletteResultTimer > 0)
-                _rouletteResultTimer -= deltaTime;
-            else
-                _rouletteResultText = "";
-
-            if (keyboard.IsKeyDown(Keys.Enter) && !_prevKeyboard.IsKeyDown(Keys.Enter))
-            {
-                int bet = _rouletteBets[_rouletteBetIndex];
-                if (_echoPoints < bet)
-                {
-                    _rouletteResultText = "Not enough Echo points";
-                    _rouletteResultTimer = 1.5f;
-                    return;
-                }
-
-                _echoPoints -= bet;
-                float roll = (float)_rand.NextDouble();
-                if (roll < 0.50f)
-                {
-                    _rouletteResultText = $"Lost {bet}";
-                }
-                else if (roll < 0.80f)
-                {
-                    int win = bet * 2;
-                    _echoPoints += win;
-                    _rouletteResultText = $"Win x2: +{win}";
-                }
-                else if (roll < 0.95f)
-                {
-                    int win = bet * 3;
-                    _echoPoints += win;
-                    _rouletteResultText = $"Win x3: +{win}";
-                }
-                else
-                {
-                    ApplyRouletteJackpot();
-                    _rouletteResultText = "JACKPOT: random upgrade!";
-                }
-
-                _rouletteResultTimer = 2.0f;
-            }
-        }
-
-        private void ApplyRouletteJackpot()
-        {
-            int pick = _rand.Next(4);
-            switch (pick)
-            {
-                case 0: _player.Damage += 3; break;
-                case 1: _player.Speed += 30f; break;
-                case 2: _player.Health = Math.Min(_player.MaxHealth, _player.Health + 40); break;
-                case 3: _spawnInterval = Math.Min(2.0f, _spawnInterval + 0.15f); break; // чуть легче
-            }
-        }
-
         private void CheckUpgrades()
         {
             if (_kills >= _nextUpgradeKills)
             {
-                ApplyUpgrade();
+                int upgradeIndex = _kills / 5;
+                switch (upgradeIndex % 5)
+                {
+                    case 0: _player.Speed += 20f; break;
+                    case 1: _player.Damage += 5; break;
+                    case 2: _player.ShootCooldownMax = Math.Max(0.1f, _player.ShootCooldownMax - 0.05f); break;
+                    case 3: _player.Health = Math.Min(_player.MaxHealth, _player.Health + 20); break;
+                    case 4: _echoPoints += 20; break;
+                }
                 _nextUpgradeKills += _upgradeStep;
                 if (_upgradeStep < 20) _upgradeStep += 5;
             }
         }
 
-        private void ApplyUpgrade()
-        {
-            int upgradeIndex = _kills / 5;
-            switch (upgradeIndex % 5)
-            {
-                case 0: _player.Speed += 20f; break;
-                case 1: _player.Damage += 5; break;
-                case 2: _player.ShootCooldownMax = Math.Max(0.1f, _player.ShootCooldownMax - 0.05f); break;
-                case 3: _player.Health = Math.Min(_player.MaxHealth, _player.Health + 20); break;
-                case 4: _echoPoints += 20; break; // бесплатный телепорт (20 очков)
-            }
-        }
-
         private void RestartGame()
         {
-            // Полный сброс состояния
-            Initialize();
-            LoadContent();
-            _screen = Screen.Playing;
+            _enemies.Clear();
+            _bullets.Clear();
+            _enemyBullets.Clear();
+            _echoOrbs.Clear();
+            _kills = 0;
+            _echoPoints = 0;
+            _spawnTimer = 0f;
+            _gameTimer = 0f;
             _isMenuOpen = false;
+            _screen = Screen.Playing;
+            _nextUpgradeKills = 5;
+            _upgradeStep = 5;
+
+            _player = new Player(new Vector2(_screenWidth / 2, _screenHeight / 2));
+            _player.LoadContent();
+
+            _waveSystem = new WaveSystem();
+            _waveSystem.StartWave();
+            _spawnInterval = _waveSystem.GetSpawnInterval();
+
+            _positionHistory.Clear();
+            for (int i = 0; i < ECHO_HISTORY_LENGTH; i++)
+                _positionHistory.Enqueue(_player.Position);
+
+            _echo = new EchoFollower(TextureManager.DecoyTex, _player.Position, followDelayFrames: 60);
         }
 
         protected override void Draw(GameTime gameTime)
@@ -517,116 +659,279 @@ namespace EchoShift
             GraphicsDevice.Clear(Color.Black);
             _spriteBatch.Begin();
 
-            // Фон
-            _spriteBatch.Draw(TextureManager.BackgroundDetailed, Vector2.Zero, Color.White);
+            _spriteBatch.Draw(TextureManager.BackgroundDetailed, new Rectangle(0, 0, _screenWidth, _screenHeight), Color.White);
 
-            // Враги
             foreach (var e in _enemies) e.Draw(_spriteBatch);
-            // Сферы эхо
             foreach (var orb in _echoOrbs) orb.Draw(_spriteBatch);
-            // Пули
             foreach (var b in _bullets) b.Draw(_spriteBatch);
-            // Вражеские пули
             foreach (var eb in _enemyBullets) eb.Draw(_spriteBatch);
-            // "Эхо" игрока
             _echo?.Draw(_spriteBatch);
-            // Игрок
             _player.Draw(_spriteBatch);
 
-            // Интерфейс
-            if (_screen == Screen.Playing)
-                _ui.Draw(_spriteBatch, _kills, _echoPoints, GetEchoProgress(), GetTeleportsAvailable(), _player.Health, _player.MaxHealth, _nextUpgradeKills);
+            DrawWaveUI();
+            _ui.Draw(_spriteBatch, _kills, _echoPoints, GetEchoProgress(), GetTeleportsAvailable(),
+                _player.Health, _player.MaxHealth, _nextUpgradeKills);
 
-            // Пауза и Game Over (проверяем, что шрифт загружен)
-            var font = _ui.GetFont();
-            if (font != null)
-            {
-                if (_screen == Screen.GameOver)
-                {
-                    _spriteBatch.DrawString(font, "GAME OVER - Press R to restart", new Vector2(500, 360), Color.Red);
-                }
-                if (_screen == Screen.Roulette)
-                {
-                    DrawRouletteOverlay(font);
-                }
-            }
+            if (_screen == Screen.GameOver) DrawGameOverScreen();
+            if (_screen == Screen.WaveComplete) DrawWaveCompleteScreen();
+            if (_screen == Screen.Roulette) DrawSlotMachineScreen();
+            if (_isMenuOpen && _screen != Screen.GameOver) DrawPauseMenu();
 
-            if (_isMenuOpen)
-            {
-                DrawMenuOverlay(font);
-            }
+            // Прицел
+            MouseState mouse = Mouse.GetState();
+            _spriteBatch.Draw(_crosshairTexture, new Rectangle(mouse.X - 15, mouse.Y - 15, 31, 31), Color.White);
 
             _spriteBatch.End();
             base.Draw(gameTime);
         }
 
-        private void DrawMenuOverlay(SpriteFont font)
+        private void DrawWaveUI()
         {
-            // затемнение + панель
-            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, 1280, 720), new Color(0, 0, 0, 180));
-            Rectangle panel = new Rectangle(440, 180, 400, 360);
-            _spriteBatch.Draw(TextureManager.Pixel, panel, new Color(10, 16, 18, 220));
-            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panel.X, panel.Y, panel.Width, 3), new Color(0, 255, 255, 160));
+            int centerX = _screenWidth / 2;
 
-            // кнопки (видимые всегда)
-            var (btnResume, btnRestart, btnQuit) = GetMenuButtons();
-            if (_screen != Screen.GameOver)
-            {
-                _spriteBatch.Draw(TextureManager.Pixel, btnResume, new Color(0, 255, 255, 40));
-                _spriteBatch.Draw(TextureManager.Pixel, btnQuit, new Color(255, 80, 80, 25));
-            }
-            _spriteBatch.Draw(TextureManager.Pixel, btnRestart, new Color(255, 255, 255, 25));
+            string waveText = $"ВОЛНА {_waveSystem.CurrentWave}";
+            Vector2 waveSize = TinyFont.Measure(waveText, 3);
+            TinyFont.Draw(_spriteBatch, waveText, new Vector2(centerX - waveSize.X / 2, _screenHeight * 1 / 100), Color.Cyan, 3);
 
-            // подписи (если есть шрифт)
-            if (font != null && _screen != Screen.GameOver)
-            {
-                _spriteBatch.DrawString(font, "MENU", new Vector2(600, 210), Color.Cyan);
-                _spriteBatch.DrawString(font, "Enter - Resume", new Vector2(545, 285), Color.White);
-                _spriteBatch.DrawString(font, "R - Restart", new Vector2(560, 355), Color.White);
-                _spriteBatch.DrawString(font, "Q - Quit", new Vector2(575, 425), Color.White);
-            }
+            string recordText = $"РЕКОРД: {_waveSystem.HighScoreWave}";
+            TinyFont.Draw(_spriteBatch, recordText, new Vector2(_screenWidth - TinyFont.Measure(recordText, 2).X - _screenWidth * 1 / 100, _screenHeight * 1 / 100), Color.Gold, 2);
 
-            // Надписи на кнопках (работают даже без SpriteFont)
-            if (_screen == Screen.GameOver)
-            {
-                DrawButtonText(btnRestart, "НАЧАТЬ СНОВА", Color.White, scale: 3);
-            }
-            else
-            {
-                DrawButtonText(btnResume, "ПРОДОЛЖИТЬ", Color.White, scale: 3);
-                DrawButtonText(btnRestart, "НАЧАТЬ СНОВА", Color.White, scale: 3);
-                DrawButtonText(btnQuit, "ВЫЙТИ", Color.White, scale: 3);
-            }
+            string killsText = $"УБИЙСТВ: {_kills}";
+            TinyFont.Draw(_spriteBatch, killsText, new Vector2(_screenWidth - TinyFont.Measure(killsText, 2).X - _screenWidth * 1 / 100, _screenHeight * 5 / 100), Color.White, 2);
+
+            int yOffset = _screenHeight * 14 / 100;
+            int lineH = _screenHeight * 3 / 100;
+            TinyFont.Draw(_spriteBatch, "ОСТАЛОСЬ ВРАГОВ:", new Vector2(_screenWidth * 1 / 100, yOffset), Color.White, 2);
+            yOffset += lineH;
+            TinyFont.Draw(_spriteBatch, $"КРАСНЫХ: {_waveSystem.EnemiesTotalByType[0]}", new Vector2(_screenWidth * 1 / 100, yOffset), new Color(255, 80, 80), 2);
+            yOffset += lineH;
+            TinyFont.Draw(_spriteBatch, $"ОРАНЖЕВЫХ: {_waveSystem.EnemiesTotalByType[1]}", new Vector2(_screenWidth * 1 / 100, yOffset), new Color(255, 165, 0), 2);
+            yOffset += lineH;
+            TinyFont.Draw(_spriteBatch, $"ФИОЛЕТОВЫХ: {_waveSystem.EnemiesTotalByType[2]}", new Vector2(_screenWidth * 1 / 100, yOffset), new Color(160, 32, 240), 2);
+            yOffset += lineH;
+            if (_waveSystem.IsWaveInProgress && _enemies.Count > 0)
+                TinyFont.Draw(_spriteBatch, $"В БОЮ: {_enemies.Count}", new Vector2(_screenWidth * 1 / 100, yOffset), Color.Gray, 2);
+
+            TinyFont.Draw(_spriteBatch, "SHIFT: ТЕЛЕПОРТ (20 ЭХА)  ПРОБЕЛ: ЛЕЧЕНИЕ (20 ЭХА)  TAB: РУЛЕТКА  ESC: МЕНЮ",
+                new Vector2(_screenWidth * 1 / 100, _screenHeight - _screenHeight * 6 / 100), new Color(150, 150, 150), 1);
+            TinyFont.Draw(_spriteBatch, "ОЧКИ ЭХА ТРАТЯТСЯ НА ТЕЛЕПОРТ И ЛЕЧЕНИЕ",
+                new Vector2(_screenWidth * 1 / 100, _screenHeight - _screenHeight * 4 / 100), new Color(100, 200, 200), 1);
         }
 
-        private void DrawButtonText(Rectangle button, string text, Color color, int scale)
+        private void DrawGameOverScreen()
         {
-            if (button == Rectangle.Empty) return;
-            Vector2 size = TinyFont.Measure(text, scale);
-            Vector2 pos = new Vector2(
-                button.X + (button.Width - size.X) / 2f,
-                button.Y + (button.Height - size.Y) / 2f
-            );
-            // тень/обводка для контраста
-            TinyFont.Draw(_spriteBatch, text, pos + new Vector2(2, 2), new Color(0, 0, 0, 200), scale);
-            TinyFont.Draw(_spriteBatch, text, pos, color, scale);
+            int centerX = _screenWidth / 2;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, _screenWidth, _screenHeight), new Color(0, 0, 0, 220));
+
+            int panelW = _screenWidth * 50 / 100;
+            int panelH = _screenHeight * 55 / 100;
+            int panelX = (_screenWidth - panelW) / 2;
+            int panelY = _screenHeight * 20 / 100;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(10, 16, 18, 240));
+
+            string title = "ИГРА ОКОНЧЕНА";
+            TinyFont.Draw(_spriteBatch, title, new Vector2(centerX - TinyFont.Measure(title, 4).X / 2, panelY + _screenHeight * 5 / 100), new Color(255, 80, 80), 4);
+
+            string wavesText = $"ПРОЙДЕНО ВОЛН: {_waveSystem.CurrentWave - 1}";
+            TinyFont.Draw(_spriteBatch, wavesText, new Vector2(centerX - TinyFont.Measure(wavesText, 3).X / 2, panelY + _screenHeight * 14 / 100), Color.Cyan, 3);
+
+            string killsText = $"УБИТО ВРАГОВ: {_kills}";
+            TinyFont.Draw(_spriteBatch, killsText, new Vector2(centerX - TinyFont.Measure(killsText, 3).X / 2, panelY + _screenHeight * 22 / 100), Color.Yellow, 3);
+
+            string echoText = $"ОЧКОВ ЭХА: {_echoPoints}";
+            TinyFont.Draw(_spriteBatch, echoText, new Vector2(centerX - TinyFont.Measure(echoText, 2).X / 2, panelY + _screenHeight * 30 / 100), Color.Cyan, 2);
+
+            if (_waveSystem.CurrentWave - 1 == _waveSystem.HighScoreWave && _waveSystem.HighScoreWave > 0)
+            {
+                string rec = "НОВЫЙ РЕКОРД!";
+                TinyFont.Draw(_spriteBatch, rec, new Vector2(centerX - TinyFont.Measure(rec, 3).X / 2, panelY + _screenHeight * 38 / 100), Color.Gold, 3);
+            }
+            else if (_waveSystem.HighScoreWave > 0)
+            {
+                string rec = $"РЕКОРД: {_waveSystem.HighScoreWave} ВОЛН";
+                TinyFont.Draw(_spriteBatch, rec, new Vector2(centerX - TinyFont.Measure(rec, 2).X / 2, panelY + _screenHeight * 38 / 100), new Color(200, 200, 100), 2);
+            }
+
+            _gameOverButtonHover = _gameOverRestartButton.Contains(Mouse.GetState().Position);
+            Color btnColor = _gameOverButtonHover ? new Color(255, 80, 80, 150) : new Color(255, 80, 80, 80);
+            _spriteBatch.Draw(TextureManager.Pixel, _gameOverRestartButton, btnColor);
+            string btnText = "НАЧАТЬ ЗАНОВО";
+            TinyFont.Draw(_spriteBatch, btnText, new Vector2(_gameOverRestartButton.X + (_gameOverRestartButton.Width - TinyFont.Measure(btnText, 3).X) / 2, _gameOverRestartButton.Y + (_gameOverRestartButton.Height - TinyFont.Measure(btnText, 3).Y) / 2), Color.White, 3);
+
+            string hint = "R ИЛИ ENTER ДЛЯ РЕСТАРТА";
+            TinyFont.Draw(_spriteBatch, hint, new Vector2(centerX - TinyFont.Measure(hint, 2).X / 2, panelY + panelH - _screenHeight * 5 / 100), new Color(150, 150, 150), 2);
         }
 
-        private void DrawRouletteOverlay(SpriteFont font)
+        private void DrawWaveCompleteScreen()
         {
-            // затемнение
-            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, 1280, 720), new Color(0, 0, 0, 180));
+            int centerX = _screenWidth / 2;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, _screenWidth, _screenHeight), new Color(0, 0, 0, 200));
 
-            _spriteBatch.DrawString(font, "ROULETTE", new Vector2(560, 210), Color.Gold);
-            _spriteBatch.DrawString(font, $"Echo points: {_echoPoints}", new Vector2(520, 250), Color.Cyan);
+            int panelW = _screenWidth * 50 / 100;
+            int panelH = _screenHeight * 65 / 100;
+            int panelX = (_screenWidth - panelW) / 2;
+            int panelY = _screenHeight * 15 / 100;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(10, 16, 18, 240));
+            float alpha = 0.5f + (float)Math.Sin(_waveCompleteFlashTimer * 8) * 0.5f;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, 2), new Color(0, 255, 255, alpha));
 
-            int bet = _rouletteBets[_rouletteBetIndex];
-            _spriteBatch.DrawString(font, $"Bet: {bet}   (Left/Right to change)", new Vector2(450, 300), Color.White);
-            _spriteBatch.DrawString(font, "Enter: Spin", new Vector2(560, 340), Color.White);
-            _spriteBatch.DrawString(font, "Esc: Back", new Vector2(565, 370), Color.White);
+            string title = $"ВОЛНА {_waveSystem.CurrentWave - 1} ЗАВЕРШЕНА!";
+            TinyFont.Draw(_spriteBatch, title, new Vector2(centerX - TinyFont.Measure(title, 3).X / 2, panelY + _screenHeight * 5 / 100), Color.Cyan, 3);
 
-            if (!string.IsNullOrWhiteSpace(_rouletteResultText))
-                _spriteBatch.DrawString(font, _rouletteResultText, new Vector2(520, 430), Color.Yellow);
+            string nextText = $"СЛЕДУЮЩАЯ ВОЛНА: {_waveSystem.CurrentWave}";
+            TinyFont.Draw(_spriteBatch, nextText, new Vector2(centerX - TinyFont.Measure(nextText, 2).X / 2, panelY + _screenHeight * 15 / 100), Color.Yellow, 2);
+
+            string killsText = $"УБИЙСТВ: {_kills}";
+            TinyFont.Draw(_spriteBatch, killsText, new Vector2(centerX - TinyFont.Measure(killsText, 2).X / 2, panelY + _screenHeight * 22 / 100), Color.White, 2);
+
+            string echoText = $"ОЧКОВ ЭХА: {_echoPoints}";
+            TinyFont.Draw(_spriteBatch, echoText, new Vector2(centerX - TinyFont.Measure(echoText, 2).X / 2, panelY + _screenHeight * 28 / 100), Color.Cyan, 2);
+
+            Color nextCol = _nextWaveButtonHover ? new Color(0, 255, 255, 150) : new Color(0, 255, 255, 80);
+            _spriteBatch.Draw(TextureManager.Pixel, _nextWaveButton, nextCol);
+            string nextBtn = "СЛЕДУЮЩАЯ ВОЛНА";
+            TinyFont.Draw(_spriteBatch, nextBtn, new Vector2(_nextWaveButton.X + (_nextWaveButton.Width - TinyFont.Measure(nextBtn, 3).X) / 2, _nextWaveButton.Y + (_nextWaveButton.Height - TinyFont.Measure(nextBtn, 3).Y) / 2), Color.White, 3);
+
+            Color restartCol = _restartWaveButtonHover ? new Color(255, 80, 80, 150) : new Color(255, 80, 80, 80);
+            _spriteBatch.Draw(TextureManager.Pixel, _restartWaveButton, restartCol);
+            string restartBtn = "НАЧАТЬ ЗАНОВО";
+            TinyFont.Draw(_spriteBatch, restartBtn, new Vector2(_restartWaveButton.X + (_restartWaveButton.Width - TinyFont.Measure(restartBtn, 3).X) / 2, _restartWaveButton.Y + (_restartWaveButton.Height - TinyFont.Measure(restartBtn, 3).Y) / 2), Color.White, 3);
+
+            string hint = "ENTER - ДАЛЕЕ    R - РЕСТАРТ    ESC - ЗАКРЫТЬ";
+            TinyFont.Draw(_spriteBatch, hint, new Vector2(centerX - TinyFont.Measure(hint, 2).X / 2, panelY + panelH - _screenHeight * 8 / 100), new Color(150, 150, 150), 2);
+        }
+
+        private void DrawSlotMachineScreen()
+        {
+            int centerX = _screenWidth / 2;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, _screenWidth, _screenHeight), new Color(0, 0, 0, 220));
+
+            int panelW = _screenWidth * 70 / 100;
+            int panelH = _screenHeight * 75 / 100;
+            int panelX = (_screenWidth - panelW) / 2;
+            int panelY = _screenHeight * 10 / 100;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(10, 16, 18, 240));
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, 2), new Color(255, 215, 0, 160));
+
+            string title = "СЛОТ 3x3";
+            TinyFont.Draw(_spriteBatch, title, new Vector2(centerX - TinyFont.Measure(title, 4).X / 2, panelY + _screenHeight * 2 / 100), Color.Gold, 4);
+
+            string pointsText = $"ОЧКОВ: {_echoPoints}";
+            TinyFont.Draw(_spriteBatch, pointsText, new Vector2(centerX - TinyFont.Measure(pointsText, 2).X / 2, panelY + _screenHeight * 8 / 100), Color.Cyan, 2);
+
+            int cellSize = _screenWidth * 7 / 100;
+            int cellSpacing = _screenWidth * 1 / 100;
+            int tableWidth = 3 * cellSize + 2 * cellSpacing;
+            int startX = centerX - tableWidth / 2;
+            int tableY = panelY + _screenHeight * 16 / 100;
+            int fontSize = 3;
+
+            for (int row = 0; row < 3; row++)
+            {
+                for (int col = 0; col < 3; col++)
+                {
+                    int x = startX + col * (cellSize + cellSpacing);
+                    int y = tableY + row * (cellSize + cellSpacing);
+                    Color bgColor = (row == 1) ? new Color(0, 40, 50, 200) : new Color(20, 20, 30, 200);
+                    _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, cellSize, cellSize), bgColor);
+                    _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, cellSize, 2), Color.Gray);
+                    _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y + cellSize - 2, cellSize, 2), Color.Gray);
+                    _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x, y, 2, cellSize), Color.Gray);
+                    _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(x + cellSize - 2, y, 2, cellSize), Color.Gray);
+
+                    string digit = _slotValues[row, col].ToString();
+                    Vector2 digitSize = TinyFont.Measure(digit, fontSize);
+                    Color digitColor;
+                    switch (_slotValues[row, col])
+                    {
+                        case 0: digitColor = Color.White; break;
+                        case 1: digitColor = Color.Cyan; break;
+                        case 2: digitColor = Color.LimeGreen; break;
+                        case 3: digitColor = Color.Yellow; break;
+                        case 4: digitColor = Color.Orange; break;
+                        case 5: digitColor = Color.HotPink; break;
+                        case 6: digitColor = Color.Purple; break;
+                        case 7: digitColor = Color.LightBlue; break;
+                        case 8: digitColor = Color.Gold; break;
+                        case 9: digitColor = Color.Tomato; break;
+                        default: digitColor = Color.White; break;
+                    }
+                    TinyFont.Draw(_spriteBatch, digit,
+                        new Vector2(x + (cellSize - digitSize.X) / 2, y + (cellSize - digitSize.Y) / 2),
+                        digitColor, fontSize);
+                }
+            }
+
+            int bottomY = panelY + panelH - _screenHeight * 14 / 100;
+            // Строка со ставкой и стрелками
+            string betLabel = "СТАВКА";
+            string betValue = _slotBets[_slotBetIndex].ToString();
+            Vector2 betLabelSize = TinyFont.Measure(betLabel, 3);
+            Vector2 betValueSize = TinyFont.Measure(betValue, 3);
+            int arrowScale = 3;
+            Vector2 arrowSize = TinyFont.Measure("<", arrowScale);
+            int totalWidth = (int)(betLabelSize.X + arrowSize.X * 2 + betValueSize.X + 20);
+            int startBetX = centerX - totalWidth / 2;
+            TinyFont.Draw(_spriteBatch, betLabel, new Vector2(startBetX, bottomY), Color.White, 3);
+            TinyFont.Draw(_spriteBatch, "<", new Vector2(startBetX + betLabelSize.X + 5, bottomY), new Color(0, 255, 255), arrowScale);
+            TinyFont.Draw(_spriteBatch, betValue, new Vector2(startBetX + betLabelSize.X + arrowSize.X + 10, bottomY), Color.Yellow, 3);
+            TinyFont.Draw(_spriteBatch, ">", new Vector2(startBetX + betLabelSize.X + arrowSize.X + betValueSize.X + 15, bottomY), new Color(0, 255, 255), arrowScale);
+            bottomY += _screenHeight * 5 / 100;
+
+            // Единая строка подсказок
+            string allHints = "СТАВКА ЧЕРЕЗ СТРЕЛКИ     ПРОБЕЛ: КРУТИТЬ     ESC: ВЫЙТИ";
+            TinyFont.Draw(_spriteBatch, allHints, new Vector2(centerX - TinyFont.Measure(allHints, 2).X / 2, bottomY), new Color(200, 200, 200), 2);
+            bottomY += _screenHeight * 4 / 100;
+
+            string rules = "ДЖЕКПОТ: 3 ОДИНАКОВЫХ (x5)   |   ПРОГРЕССИЯ (x2)";
+            TinyFont.Draw(_spriteBatch, rules, new Vector2(centerX - TinyFont.Measure(rules, 2).X / 2, bottomY), new Color(255, 215, 0, 200), 2);
+
+            if (!string.IsNullOrWhiteSpace(_slotResultText) && _slotResultTimer > 0)
+                TinyFont.Draw(_spriteBatch, _slotResultText, new Vector2(centerX - TinyFont.Measure(_slotResultText, 2).X / 2, bottomY + _screenHeight * 4 / 100), Color.Yellow, 2);
+        }
+
+        private void DrawPauseMenu()
+        {
+            int centerX = _screenWidth / 2;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(0, 0, _screenWidth, _screenHeight), new Color(0, 0, 0, 180));
+
+            int panelW = _screenWidth * 35 / 100;
+            int panelH = _screenHeight * 50 / 100;
+            int panelX = (_screenWidth - panelW) / 2;
+            int panelY = _screenHeight * 25 / 100;
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, panelH), new Color(10, 16, 18, 240));
+            _spriteBatch.Draw(TextureManager.Pixel, new Rectangle(panelX, panelY, panelW, 2), new Color(0, 255, 255, 160));
+
+            string title = "МЕНЮ";
+            TinyFont.Draw(_spriteBatch, title, new Vector2(centerX - TinyFont.Measure(title, 4).X / 2, panelY + _screenHeight * 5 / 100), Color.Cyan, 4);
+
+            int btnW = _screenWidth * 25 / 100;
+            int btnH = _screenHeight * 7 / 100;
+            int btnX = (_screenWidth - btnW) / 2;
+            int yOff = panelY + _screenHeight * 15 / 100;
+            Rectangle resumeBtn = new Rectangle(btnX, yOff, btnW, btnH);
+            Rectangle restartBtn = new Rectangle(btnX, yOff + _screenHeight * 9 / 100, btnW, btnH);
+            Rectangle quitBtn = new Rectangle(btnX, yOff + _screenHeight * 18 / 100, btnW, btnH);
+
+            MouseState mouse = Mouse.GetState();
+            Color resumeCol = resumeBtn.Contains(mouse.Position) ? new Color(0, 255, 255, 120) : new Color(0, 255, 255, 60);
+            Color restartCol = restartBtn.Contains(mouse.Position) ? new Color(255, 80, 80, 120) : new Color(255, 80, 80, 60);
+            Color quitCol = quitBtn.Contains(mouse.Position) ? new Color(200, 50, 50, 120) : new Color(200, 50, 50, 60);
+
+            _spriteBatch.Draw(TextureManager.Pixel, resumeBtn, resumeCol);
+            _spriteBatch.Draw(TextureManager.Pixel, restartBtn, restartCol);
+            _spriteBatch.Draw(TextureManager.Pixel, quitBtn, quitCol);
+
+            string resumeText = "ПРОДОЛЖИТЬ";
+            string restartText = "НАЧАТЬ ЗАНОВО";
+            string quitText = "ВЫХОД";
+
+            TinyFont.Draw(_spriteBatch, resumeText, new Vector2(resumeBtn.X + (resumeBtn.Width - TinyFont.Measure(resumeText, 3).X) / 2, resumeBtn.Y + (resumeBtn.Height - TinyFont.Measure(resumeText, 3).Y) / 2), Color.White, 3);
+            TinyFont.Draw(_spriteBatch, restartText, new Vector2(restartBtn.X + (restartBtn.Width - TinyFont.Measure(restartText, 3).X) / 2, restartBtn.Y + (restartBtn.Height - TinyFont.Measure(restartText, 3).Y) / 2), Color.White, 3);
+            TinyFont.Draw(_spriteBatch, quitText, new Vector2(quitBtn.X + (quitBtn.Width - TinyFont.Measure(quitText, 3).X) / 2, quitBtn.Y + (quitBtn.Height - TinyFont.Measure(quitText, 3).Y) / 2), Color.White, 3);
+
+            string hint = "ENTER - ПРОДОЛЖИТЬ    R - РЕСТАРТ    Q - ВЫХОД";
+            TinyFont.Draw(_spriteBatch, hint, new Vector2(centerX - TinyFont.Measure(hint, 2).X / 2, panelY + panelH - _screenHeight * 8 / 100), new Color(150, 150, 150), 2);
         }
     }
 }
