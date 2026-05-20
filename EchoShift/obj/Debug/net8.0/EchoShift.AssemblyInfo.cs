@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("EchoShift")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+db4009fd51f335f60f9bf371900c8fbaef0f07e4")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0b1befff3a515449c7b50afe182bf563bbb19e87")]
 [assembly: System.Reflection.AssemblyProductAttribute("EchoShift")]
 [assembly: System.Reflection.AssemblyTitleAttribute("EchoShift")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

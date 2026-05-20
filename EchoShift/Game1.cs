@@ -418,112 +418,134 @@ namespace EchoShift
         }
 
         private void UpdateSlotMachine(float deltaTime, KeyboardState keyboard)
+{
+    if (keyboard.IsKeyDown(Keys.Escape) && !_prevKeyboard.IsKeyDown(Keys.Escape))
+    {
+        _screen = Screen.Playing;
+        return;
+    }
+
+    if (!_isSlotSpinning)
+    {
+        if (keyboard.IsKeyDown(Keys.Left) && !_prevKeyboard.IsKeyDown(Keys.Left))
+            _slotBetIndex = (_slotBetIndex + _slotBets.Length - 1) % _slotBets.Length;
+        if (keyboard.IsKeyDown(Keys.Right) && !_prevKeyboard.IsKeyDown(Keys.Right))
+            _slotBetIndex = (_slotBetIndex + 1) % _slotBets.Length;
+        if (keyboard.IsKeyDown(Keys.Up) && !_prevKeyboard.IsKeyDown(Keys.Up))
         {
-            if (keyboard.IsKeyDown(Keys.Escape) && !_prevKeyboard.IsKeyDown(Keys.Escape))
-            {
-                _screen = Screen.Playing;
-                return;
-            }
+            var newBet = _slotBets[_slotBetIndex] + 10;
+            var bestIdx = _slotBetIndex;
+            for (var i = 0; i < _slotBets.Length; i++)
+                if (_slotBets[i] >= newBet && _slotBets[i] < _slotBets[bestIdx])
+                    bestIdx = i;
+            if (_slotBets[bestIdx] < newBet) bestIdx = _slotBets.Length - 1;
+            _slotBetIndex = bestIdx;
+        }
+        if (keyboard.IsKeyDown(Keys.Down) && !_prevKeyboard.IsKeyDown(Keys.Down))
+        {
+            var newBet = _slotBets[_slotBetIndex] - 10;
+            var bestIdx = _slotBetIndex;
+            for (var i = _slotBets.Length - 1; i >= 0; i--)
+                if (_slotBets[i] <= newBet && _slotBets[i] > _slotBets[bestIdx])
+                    bestIdx = i;
+            if (_slotBets[bestIdx] > newBet) bestIdx = 0;
+            _slotBetIndex = bestIdx;
+        }
+    }
 
-            if (!_isSlotSpinning)
-            {
-                if (keyboard.IsKeyDown(Keys.Left) && !_prevKeyboard.IsKeyDown(Keys.Left))
-                    _slotBetIndex = (_slotBetIndex + _slotBets.Length - 1) % _slotBets.Length;
-                if (keyboard.IsKeyDown(Keys.Right) && !_prevKeyboard.IsKeyDown(Keys.Right))
-                    _slotBetIndex = (_slotBetIndex + 1) % _slotBets.Length;
-                if (keyboard.IsKeyDown(Keys.Up) && !_prevKeyboard.IsKeyDown(Keys.Up))
-                {
-                    var newBet = _slotBets[_slotBetIndex] + 10;
-                    var bestIdx = _slotBetIndex;
-                    for (var i = 0; i < _slotBets.Length; i++)
-                        if (_slotBets[i] >= newBet && _slotBets[i] < _slotBets[bestIdx])
-                            bestIdx = i;
-                    if (_slotBets[bestIdx] < newBet) bestIdx = _slotBets.Length - 1;
-                    _slotBetIndex = bestIdx;
-                }
-                if (keyboard.IsKeyDown(Keys.Down) && !_prevKeyboard.IsKeyDown(Keys.Down))
-                {
-                    var newBet = _slotBets[_slotBetIndex] - 10;
-                    var bestIdx = _slotBetIndex;
-                    for (var i = _slotBets.Length - 1; i >= 0; i--)
-                        if (_slotBets[i] <= newBet && _slotBets[i] > _slotBets[bestIdx])
-                            bestIdx = i;
-                    if (_slotBets[bestIdx] > newBet) bestIdx = 0;
-                    _slotBetIndex = bestIdx;
-                }
-            }
+    if (keyboard.IsKeyDown(Keys.Space) && !_prevKeyboard.IsKeyDown(Keys.Space) && !_isSlotSpinning)
+    {
+        var bet = _slotBets[_slotBetIndex];
+        if (_echoPoints >= bet)
+        {
+            _echoPoints -= bet;
+            _isSlotSpinning = true;
+            _slotSpinTimer = 0f;
+            _slotResultText = "";
+        }
+        else
+        {
+            _slotResultText = "НЕ ХВАТАЕТ ОЧКОВ";
+            _slotResultTimer = 1.0f;
+        }
+    }
 
-            if (keyboard.IsKeyDown(Keys.Space) && !_prevKeyboard.IsKeyDown(Keys.Space) && !_isSlotSpinning)
+    if (_isSlotSpinning)
+    {
+        _slotSpinTimer += deltaTime;
+        for (var col = 0; col < 3; col++)
+            for (var row = 0; row < 3; row++)
+                _slotValues[row, col] = _rand.Next(0, 10);
+
+        if (_slotSpinTimer >= SLOT_SPIN_DURATION)
+        {
+            _isSlotSpinning = false;
+
+            if (_rand.NextDouble() < 0.30)
             {
-                var bet = _slotBets[_slotBetIndex];
-                if (_echoPoints >= bet)
+                var winType = _rand.Next(2);
+                if (winType == 0)
                 {
-                    _echoPoints -= bet;
-                    _isSlotSpinning = true;
-                    _slotSpinTimer = 0f;
-                    _slotResultText = "";
+                    var digit = _rand.Next(0, 10);
+                    for (var col = 0; col < 3; col++)
+                        _slotValues[1, col] = digit;
                 }
                 else
                 {
-                    _slotResultText = "НЕ ХВАТАЕТ ОЧКОВ";
-                    _slotResultTimer = 1.0f;
-                }
-            }
-
-            if (_isSlotSpinning)
-            {
-                _slotSpinTimer += deltaTime;
-                for (var col = 0; col < 3; col++)
-                    for (var row = 0; row < 3; row++)
-                        _slotValues[row, col] = _rand.Next(0, 10);
-
-                if (_slotSpinTimer >= SLOT_SPIN_DURATION)
-                {
-                    _isSlotSpinning = false;
-                    for (var col = 0; col < 3; col++)
-                    {
-                        var colValues = new int[3];
-                        for (var row = 0; row < 3; row++)
-                            colValues[row] = _rand.Next(0, 10);
-                        for (var row = 0; row < 3; row++)
-                            _slotValues[row, col] = colValues[row];
-                    }
-
-                    var val0 = _slotValues[1, 0];
-                    var val1 = _slotValues[1, 1];
-                    var val2 = _slotValues[1, 2];
-                    var bet = _slotBets[_slotBetIndex];
-                    var win = 0;
-                    string resultMsg = "";
-
-                    if (val0 == val1 && val1 == val2)
-                    {
-                        win = bet * 5;
-                        resultMsg = $"ДЖЕКПОТ! +{win}";
-                    }
-                    else if ((val1 - val0) == (val2 - val1) && (val1 - val0) != 0)
-                    {
-                        win = bet * 2;
-                        resultMsg = $"ПРОГРЕССИЯ! +{win}";
-                    }
-                    else
-                    {
-                        win = 0;
-                        resultMsg = "ПРОИГРЫШ";
-                    }
-
-                    if (win > 0)
-                        _echoPoints += win;
-                    _slotResultText = resultMsg;
-                    _slotResultTimer = 2.0f;
+                    var startVal = _rand.Next(0, 7);
+                    var stepVal = _rand.Next(1, 3);
+                    _slotValues[1, 0] = startVal;
+                    _slotValues[1, 1] = startVal + stepVal;
+                    _slotValues[1, 2] = startVal + stepVal * 2;
                 }
             }
             else
             {
-                if (_slotResultTimer > 0) _slotResultTimer -= deltaTime;
-                else _slotResultText = "";
+                for (var col = 0; col < 3; col++)
+                {
+                    var colValues = new int[3];
+                    for (var row = 0; row < 3; row++)
+                        colValues[row] = _rand.Next(0, 10);
+                    for (var row = 0; row < 3; row++)
+                        _slotValues[row, col] = colValues[row];
+                }
             }
+
+            var val0 = _slotValues[1, 0];
+            var val1 = _slotValues[1, 1];
+            var val2 = _slotValues[1, 2];
+            var bet = _slotBets[_slotBetIndex];
+            var win = 0;
+            string resultMsg = "";
+
+            if (val0 == val1 && val1 == val2)
+            {
+                win = bet * 5;
+                resultMsg = $"ДЖЕКПОТ! +{win}";
+            }
+            else if ((val1 - val0) == (val2 - val1) && (val1 - val0) != 0)
+            {
+                win = bet * 2;
+                resultMsg = $"ПРОГРЕССИЯ! +{win}";
+            }
+            else
+            {
+                win = 0;
+                resultMsg = "ПРОИГРЫШ";
+            }
+
+            if (win > 0)
+                _echoPoints += win;
+            _slotResultText = resultMsg;
+            _slotResultTimer = 2.0f;
         }
+    }
+    else
+    {
+        if (_slotResultTimer > 0) _slotResultTimer -= deltaTime;
+        else _slotResultText = "";
+    }
+}
 
         private void NextWave()
         {
