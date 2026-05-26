@@ -22,12 +22,14 @@ public class Enemy
     private float _shootRange;
     private int _shootDamage;
     private int _currentWave;
+    private SpriteEffects _spriteEffect = SpriteEffects.None;
 
     public Enemy(Vector2 startPos, int type, int currentWave = 1)
     {
         Position = startPos;
         _type = type;
         _currentWave = currentWave;
+        
         switch (type)
         {
             case 0:
@@ -87,7 +89,20 @@ public class Enemy
         var direction = target - Position;
         if (direction != Vector2.Zero) direction.Normalize();
         Position += direction * Speed * deltaTime;
-        if (IsRanged) _shootTimer -= deltaTime;
+
+        if (IsRanged)
+            _shootTimer -= deltaTime;
+
+        if (_type == 1)
+        {
+            if (target.X < Position.X) _spriteEffect = SpriteEffects.None;
+            else _spriteEffect = SpriteEffects.FlipHorizontally;
+        }
+        else
+        {
+            if (target.X < Position.X) _spriteEffect = SpriteEffects.FlipHorizontally;
+            else _spriteEffect = SpriteEffects.None;
+        }
     }
 
     public bool TryShoot(Vector2 targetPos, out Vector2 direction, out int damage)
@@ -114,7 +129,8 @@ public class Enemy
             Shield -= shieldDamage;
             amount -= shieldDamage;
         }
-        if (amount > 0) Health -= amount;
+        if (amount > 0)
+            Health -= amount;
     }
 
     public bool CollidesWith(Player player)
@@ -126,7 +142,7 @@ public class Enemy
 
     public void Draw(SpriteBatch spriteBatch)
     {
-        spriteBatch.Draw(_texture, Position, Color.White);
+        spriteBatch.Draw(_texture, Position, null, Color.White, 0f, Vector2.Zero, 1f, _spriteEffect, 0f);
 
         var hp01 = MaxHealth <= 0 ? 0f : MathHelper.Clamp((float)Health / MaxHealth, 0f, 1f);
         var barW = 32;

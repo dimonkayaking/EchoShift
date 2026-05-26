@@ -1,1 +1,5 @@
 Source File,Dest File,Processor Type,Content Type,Source File Size,Dest File Size,Build Seconds
+"C:/Users/Пользователь/Documents/GitHub/C-Game/EchoShift/Content/orange_enemy.png","C:/Users/Пользователь/Documents/GitHub/C-Game/EchoShift/Content/bin/DesktopGL/Content/orange_enemy.xnb","TextureProcessor","Texture2DContent",541,4181,0,0022102
+"C:/Users/Пользователь/Documents/GitHub/C-Game/EchoShift/Content/player.png","C:/Users/Пользователь/Documents/GitHub/C-Game/EchoShift/Content/bin/DesktopGL/Content/player.xnb","TextureProcessor","Texture2DContent",960,4181,0,1556233
+"C:/Users/Пользователь/Documents/GitHub/C-Game/EchoShift/Content/purple_enemy.png","C:/Users/Пользователь/Documents/GitHub/C-Game/EchoShift/Content/bin/DesktopGL/Content/purple_enemy.xnb","TextureProcessor","Texture2DContent",892,4181,0,0019448
+"C:/Users/Пользователь/Documents/GitHub/C-Game/EchoShift/Content/red_enemy.png","C:/Users/Пользователь/Documents/GitHub/C-Game/EchoShift/Content/bin/DesktopGL/Content/red_enemy.xnb","TextureProcessor","Texture2DContent",569,4181,0,0026636

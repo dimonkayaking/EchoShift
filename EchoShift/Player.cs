@@ -15,10 +15,7 @@ public class Player
     private float _invincibleTimer;
     public bool IsShiftActive { get; set; }
 
-    private AnimationHelper _idleAnim;
-    private AnimationHelper _walkAnim;
-    private AnimationHelper _shootAnim;
-    private AnimationHelper _currentAnim;
+    private Texture2D _texture;
     private SpriteEffects _spriteEffect = SpriteEffects.None;
 
     public static int ScreenWidth = 1280;
@@ -39,10 +36,7 @@ public class Player
 
     public void LoadContent()
     {
-        _idleAnim = new AnimationHelper(TextureManager.PlayerIdle, 1, 0.1f, true);
-        _walkAnim = new AnimationHelper(TextureManager.PlayerWalk, 5, 0.1f, true);
-        _shootAnim = new AnimationHelper(TextureManager.PlayerShoot, 4, 0.05f, false);
-        _currentAnim = _idleAnim;
+        _texture = TextureManager.Player;
     }
 
     public void Update(float deltaTime, MouseState mouse, KeyboardState keyboard)
@@ -57,21 +51,6 @@ public class Player
         Position.X = MathHelper.Clamp(Position.X, 0, ScreenWidth - 32);
         Position.Y = MathHelper.Clamp(Position.Y, 0, ScreenHeight - 32);
 
-        var isShooting = mouse.LeftButton == ButtonState.Pressed && _shootCooldown <= 0;
-        var isMoving = move != Vector2.Zero;
-
-        if (isShooting)
-        {
-            if (_currentAnim != _shootAnim || _shootAnim.IsFinished)
-            {
-                _currentAnim = _shootAnim;
-                _shootAnim.Reset();
-            }
-        }
-        else if (isMoving) _currentAnim = _walkAnim;
-        else _currentAnim = _idleAnim;
-
-        _currentAnim.Update(deltaTime);
         if (_shootCooldown > 0) _shootCooldown -= deltaTime;
 
         if (IsInvincible)
@@ -81,7 +60,9 @@ public class Player
         }
 
         var mousePos = mouse.Position.ToVector2();
-        _spriteEffect = mousePos.X < Position.X ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+        if (mousePos.X < Position.X) _spriteEffect = SpriteEffects.FlipHorizontally;
+        else _spriteEffect = SpriteEffects.None;
+
         IsShiftActive = false;
     }
 
@@ -106,6 +87,6 @@ public class Player
 
     public void Draw(SpriteBatch spriteBatch)
     {
-        _currentAnim.Draw(spriteBatch, Position, _spriteEffect);
+        spriteBatch.Draw(_texture, Position, null, Color.White, 0f, Vector2.Zero, 1f, _spriteEffect, 0f);
     }
 }

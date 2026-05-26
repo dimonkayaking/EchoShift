@@ -24,3 +24,7 @@ C:\Users\Пользователь\Documents\GitHub\C-Game\EchoShift\obj\Debug\ne
 C:\Users\Пользователь\Documents\GitHub\C-Game\EchoShift\obj\Debug\net8.0\EchoShift.pdb
 C:\Users\Пользователь\Documents\GitHub\C-Game\EchoShift\obj\Debug\net8.0\EchoShift.genruntimeconfig.cache
 C:\Users\Пользователь\Documents\GitHub\C-Game\EchoShift\obj\Debug\net8.0\ref\EchoShift.dll
+C:\Users\Пользователь\Documents\GitHub\C-Game\EchoShift\bin\Debug\net8.0\Content\orange_enemy.xnb
+C:\Users\Пользователь\Documents\GitHub\C-Game\EchoShift\bin\Debug\net8.0\Content\player.xnb
+C:\Users\Пользователь\Documents\GitHub\C-Game\EchoShift\bin\Debug\net8.0\Content\purple_enemy.xnb
+C:\Users\Пользователь\Documents\GitHub\C-Game\EchoShift\bin\Debug\net8.0\Content\red_enemy.xnb
